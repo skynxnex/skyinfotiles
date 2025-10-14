@@ -295,10 +295,6 @@ function API.update(frame, cfg)
   -- Pet existence + health
   local hasPet = UnitExists and UnitExists(UNIT_TOKEN)
   if not hasPet then
-    if frame.secureBtn then
-      frame.secureBtn:Hide()
-      frame.secureBtn:EnableMouse(false)
-    end
     if InCombatLockdown and InCombatLockdown() then
       frame:SetAlpha(0)
     else
@@ -348,11 +344,14 @@ function API.update(frame, cfg)
     end
   end
 
-  -- Secure button mouse while locked
+  -- Secure button interactivity via z-order only (avoid Show/Hide to prevent taint)
   if frame.secureBtn then
-    frame.secureBtn:EnableMouse(locked)
     if locked then
-      frame.secureBtn:Show()
+      -- Bring overlay above the tile to receive clicks
+      if not (InCombatLockdown and InCombatLockdown()) then
+        frame.secureBtn:SetFrameStrata(frame:GetFrameStrata() or "MEDIUM")
+        frame.secureBtn:SetFrameLevel((frame:GetFrameLevel() or 0) + 50)
+      end
       if not InCombatLockdown or not InCombatLockdown() then
         if ClickCastFrames then ClickCastFrames[frame.secureBtn] = true end
         if C_ClickBindings and C_ClickBindings.RegisterFrame then pcall(C_ClickBindings.RegisterFrame, frame.secureBtn) end
@@ -367,7 +366,11 @@ function API.update(frame, cfg)
         frame.secureBtn:SetAttribute("alt-type2", "togglemenu")
       end
     else
-      frame.secureBtn:Hide()
+      -- Push overlay behind so base frame receives clicks; appears inert to mouse
+      if not (InCombatLockdown and InCombatLockdown()) then
+        frame.secureBtn:SetFrameStrata("BACKGROUND")
+        frame.secureBtn:SetFrameLevel(1)
+      end
     end
   end
 end

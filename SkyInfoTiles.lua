@@ -273,6 +273,16 @@ end
 -- ===== Frames lifecycle =====
 local tilesFrames = {}
 
+local function InLockdown()
+  return InCombatLockdown and InCombatLockdown()
+end
+
+SkyInfoTiles._pendingRebuild = SkyInfoTiles._pendingRebuild or false
+
+local function DeferRebuild()
+  SkyInfoTiles._pendingRebuild = true
+end
+
 local function SetMovable(f)
   if f and f._noDrag then
     if f.EnableMouse then f:EnableMouse(false) end
@@ -285,27 +295,46 @@ local function SetMovable(f)
     return
   end
   local unlocked = not SkyInfoTilesDB.locked
-  f:EnableMouse(unlocked)
-  f:SetMovable(unlocked)
-  if unlocked then
-    f:RegisterForDrag("LeftButton")
-    f:SetScript("OnDragStart", f.StartMoving)
-    f:SetScript("OnDragStop", function(self)
-      self:StopMovingOrSizing()
-      local point, _, _, x, y = self:GetPoint()
-      if self._cfg then self._cfg.point, self._cfg.x, self._cfg.y = point, x, y end
-    end)
-  else
-    f:RegisterForDrag()
-    f:SetScript("OnDragStart", nil)
-    f:SetScript("OnDragStop", nil)
+  if not (InCombatLockdown and InCombatLockdown()) then
+    if f.EnableMouse then f:EnableMouse(unlocked) end
+    if f.SetMovable then f:SetMovable(unlocked) end
+    if unlocked and f.RegisterForDrag then
+      f:RegisterForDrag("LeftButton")
+      f:SetScript("OnDragStart", function(self)
+        if self.StartMoving then self:StartMoving() end
+      end)
+      local function StopDragging(self)
+        if self.StopMovingOrSizing then self:StopMovingOrSizing() end
+        local point, _, _, x, y = self:GetPoint()
+        if self._cfg then self._cfg.point, self._cfg.x, self._cfg.y = point, x, y end
+      end
+      f:SetScript("OnDragStop", StopDragging)
+      if f.SetScript then
+        f:SetScript("OnMouseUp", StopDragging)
+        f:SetScript("OnHide", function(self)
+          if self.StopMovingOrSizing then self:StopMovingOrSizing() end
+        end)
+      end
+    elseif f.RegisterForDrag then
+      f:RegisterForDrag()
+      f:SetScript("OnDragStart", nil)
+      f:SetScript("OnDragStop", nil)
+      if f.SetScript then
+        f:SetScript("OnMouseUp", nil)
+        f:SetScript("OnHide", nil)
+      end
+    end
   end
 end
 
 function SkyInfoTiles.Rebuild()
+  if InLockdown() then
+    DeferRebuild()
+    return
+  end
   for i, f in ipairs(tilesFrames) do
     if f and f.Destroy then pcall(f.Destroy, f) end
-    if f and f.Hide then f:Hide() end
+    if f and f.Hide and not InLockdown() then f:Hide() end
     tilesFrames[i] = nil
   end
   tilesFrames = {}
@@ -334,6 +363,10 @@ function SkyInfoTiles.Rebuild()
 end
 
 function SkyInfoTiles.UpdateAll()
+  if InLockdown() then
+    DeferRebuild()
+    return
+  end
   local tiles = SkyInfoTiles.GetActiveTiles()
   for _, cfg in ipairs(tiles) do
     if cfg.enabled ~= false then
@@ -595,6 +628,7 @@ local ev = CreateFrame("Frame")
 ev:RegisterEvent("PLAYER_LOGIN")
 ev:RegisterEvent("CURRENCY_DISPLAY_UPDATE")
 ev:RegisterEvent("PLAYER_SPECIALIZATION_CHANGED")
+ev:RegisterEvent("PLAYER_REGEN_ENABLED")
 ev:SetScript("OnEvent", function(self, event, ...)
   if event == "PLAYER_LOGIN" then
     SkyInfoTilesDB = SkyInfoTilesDB or {}
@@ -633,5 +667,12 @@ ev:SetScript("OnEvent", function(self, event, ...)
     SkyInfoTiles.Rebuild()
     SkyInfoTiles.UpdateAll()
     if SkyInfoTiles._OptionsRefresh then SkyInfoTiles._OptionsRefresh() end
+  elseif event == "PLAYER_REGEN_ENABLED" then
+    if SkyInfoTiles._pendingRebuild then
+      SkyInfoTiles._pendingRebuild = false
+      SkyInfoTiles.Rebuild()
+      SkyInfoTiles.UpdateAll()
+      if SkyInfoTiles._OptionsRefresh then SkyInfoTiles._OptionsRefresh() end
+    end
   end
 end)

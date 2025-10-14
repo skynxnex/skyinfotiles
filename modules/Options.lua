@@ -1,6 +1,31 @@
 local ADDON_NAME = ...
 local SkyInfoTiles = _G[ADDON_NAME]
 
+-- Dynamic font list using LibSharedMedia (if available)
+local function BuildFontOptions()
+  local opts = {}
+  local LSM = LibStub and LibStub("LibSharedMedia-3.0", true)
+  if LSM and LSM.List and LSM.Fetch then
+    local names = LSM:List("font") or {}
+    table.sort(names, function(a, b) return tostring(a):lower() < tostring(b):lower() end)
+    for _, name in ipairs(names) do
+      local file = LSM:Fetch("font", name)
+      if type(file) == "string" and file ~= "" then
+        table.insert(opts, { label = name, file = file })
+      end
+    end
+  end
+  if #opts == 0 then
+    opts = {
+      { label = "Friz Quadrata", file = "Fonts\\FRIZQT__.TTF" },
+      { label = "Arial Narrow",  file = "Fonts\\ARIALN.TTF"   },
+      { label = "Morpheus",      file = "Fonts\\MORPHEUS.ttf" },
+      { label = "Skurri",        file = "Fonts\\SKURRI.ttf"   },
+    }
+  end
+  return opts
+end
+
 -- Simple checkbox helper
 local function CreateCheckbox(parent, label)
   local cb = CreateFrame("CheckButton", nil, parent, "UICheckButtonTemplate")
@@ -1254,12 +1279,7 @@ local function RefreshList()
   panel.hbFontDrop:ClearAllPoints()
   panel.hbFontDrop:SetPoint("LEFT", panel.hbFontLabel, "RIGHT", 8, 0)
   panel.hbFontDrop:Show()
-  local fontOptions = {
-    { label = "Friz Quadrata", file = "Fonts\\FRIZQT__.TTF" },
-    { label = "Arial Narrow",  file = "Fonts\\ARIALN.TTF"   },
-    { label = "Morpheus",      file = "Fonts\\MORPHEUS.ttf" },
-    { label = "Skurri",        file = "Fonts\\SKURRI.ttf"   },
-  }
+  local fontOptions = BuildFontOptions()
   local currentFont = (hbCfg and hbCfg.font) or "Fonts\\FRIZQT__.TTF"
   local currentFontLabel = "Friz Quadrata"
   for _, it in ipairs(fontOptions) do if it.file == currentFont then currentFontLabel = it.label end end
@@ -1667,12 +1687,7 @@ local function RefreshList()
   panel.tbFontDrop:ClearAllPoints()
   panel.tbFontDrop:SetPoint("LEFT", panel.tbFontLabel, "RIGHT", 8, 0)
   panel.tbFontDrop:Show()
-  local tbFontOptions = {
-    { label = "Friz Quadrata", file = "Fonts\\FRIZQT__.TTF" },
-    { label = "Arial Narrow",  file = "Fonts\\ARIALN.TTF"   },
-    { label = "Morpheus",      file = "Fonts\\MORPHEUS.ttf" },
-    { label = "Skurri",        file = "Fonts\\SKURRI.ttf"   },
-  }
+  local tbFontOptions = BuildFontOptions()
   local tbCurrentFont = tbFont
   local tbCurrentFontLabel = "Friz Quadrata"
   for _, it in ipairs(tbFontOptions) do if it.file == tbCurrentFont then tbCurrentFontLabel = it.label end end
@@ -2052,12 +2067,7 @@ local function RefreshList()
   panel.pbFontDrop:ClearAllPoints()
   panel.pbFontDrop:SetPoint("LEFT", panel.pbFontLabel, "RIGHT", 8, 0)
   panel.pbFontDrop:Show()
-  local pbFontOptions = {
-    { label = "Friz Quadrata", file = "Fonts\\FRIZQT__.TTF" },
-    { label = "Arial Narrow",  file = "Fonts\\ARIALN.TTF"   },
-    { label = "Morpheus",      file = "Fonts\\MORPHEUS.ttf" },
-    { label = "Skurri",        file = "Fonts\\SKURRI.ttf"   },
-  }
+  local pbFontOptions = BuildFontOptions()
   local pbCurrentFont = pbFont
   local pbCurrentFontLabel = "Friz Quadrata"
   for _, it in ipairs(pbFontOptions) do if it.file == pbCurrentFont then pbCurrentFontLabel = it.label end end
@@ -2198,12 +2208,7 @@ local function RefreshList()
   panel.ckFontDrop:ClearAllPoints()
   panel.ckFontDrop:SetPoint("LEFT", panel.ckFontLabel, "RIGHT", 8, 0)
   panel.ckFontDrop:Show()
-  local ckFontOptions = {
-    { label = "Friz Quadrata", file = "Fonts\\FRIZQT__.TTF" },
-    { label = "Arial Narrow",  file = "Fonts\\ARIALN.TTF"   },
-    { label = "Morpheus",      file = "Fonts\\MORPHEUS.ttf" },
-    { label = "Skurri",        file = "Fonts\\SKURRI.ttf"   },
-  }
+  local ckFontOptions = BuildFontOptions()
   local ckFontLabel = "Friz Quadrata"
   for _, it in ipairs(ckFontOptions) do if it.file == ckFont then ckFontLabel = it.label end end
   if UIDropDownMenu_Initialize then

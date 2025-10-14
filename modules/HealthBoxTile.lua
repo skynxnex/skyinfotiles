@@ -156,7 +156,6 @@ function API.create(parent, cfg)
   f.secureBtn:SetFrameStrata(f:GetFrameStrata() or "MEDIUM")
   f.secureBtn:SetToplevel(false)
   f.secureBtn:SetFrameLevel((f:GetFrameLevel() or 0) + 50)
-  f.secureBtn:Hide()
   f.secureBtn.unit = "player"
   f.secureBtn:SetScript("OnEnter", UnitFrame_OnEnter)
   f.secureBtn:SetScript("OnLeave", UnitFrame_OnLeave)
@@ -419,11 +418,14 @@ function API.update(frame, cfg)
     end
   end
 
-  -- Secure button overlay click handling when locked
+  -- Secure button overlay click handling when locked (z-order only; no Show/Hide to avoid taint)
   if frame.secureBtn then
-    frame.secureBtn:EnableMouse(locked)
     if locked then
-      frame.secureBtn:Show()
+      -- Bring overlay above the tile to receive clicks
+      if not (InCombatLockdown and InCombatLockdown()) then
+        frame.secureBtn:SetFrameStrata(frame:GetFrameStrata() or "MEDIUM")
+        frame.secureBtn:SetFrameLevel((frame:GetFrameLevel() or 0) + 50)
+      end
       -- Re-register with Click Casting on lock (out of combat) to ensure latest bindings (incl. SHIFT modifiers) are applied
       if not InCombatLockdown or not InCombatLockdown() then
         if ClickCastFrames then ClickCastFrames[frame.secureBtn] = true end
@@ -439,7 +441,11 @@ function API.update(frame, cfg)
         frame.secureBtn:SetAttribute("alt-type2", "togglemenu")
       end
     else
-      frame.secureBtn:Hide()
+      -- Push overlay behind so base frame receives clicks; appears inert to mouse
+      if not (InCombatLockdown and InCombatLockdown()) then
+        frame.secureBtn:SetFrameStrata("BACKGROUND")
+        frame.secureBtn:SetFrameLevel(1)
+      end
     end
   end
 end

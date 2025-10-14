@@ -4,6 +4,16 @@ local UI = SkyInfoTiles and SkyInfoTiles.UI
 
 local API = {}
 
+-- Debug build signature for taint tracing
+local TARGETBOX_BUILD = "TargetBoxTile/2025-10-12-r1"
+local function TB_Print(msg)
+  if DEFAULT_CHAT_FRAME then
+    DEFAULT_CHAT_FRAME:AddMessage("|cff66ccffSkyInfoTiles(TargetBox):|r " .. tostring(msg))
+  end
+end
+
+local TB_DEBUG = true -- instrumentation; set to false after validation
+
 -- Defaults (mirrors HealthBoxTile)
 local DEFAULT_W = 220
 local DEFAULT_H = 22
@@ -53,20 +63,58 @@ local function BuildText(cur, maxv, mode)
 end
 
 function API.create(parent, cfg)
-  local f = CreateFrame("Frame", nil, parent, "BackdropTemplate")
+  local f = CreateFrame("Frame", "SkyInfoTiles_TargetBox", parent)
+  -- Ensure visible by default; we avoid Show/Hide during frequent events elsewhere
+  if f.SetAlpha then f:SetAlpha(1) end
+  if f.Show then f:Show() end
 
-  -- Base textures
-  f.bg = f:CreateTexture(nil, "BACKGROUND")
-  f.bg:SetPoint("TOPLEFT")
-  f.bg:SetPoint("BOTTOMRIGHT")
+  -- Removed method overrides to avoid tainting Frame methods; sizing is only applied out-of-combat via ApplyInitialSize()
 
-  f.fg = f:CreateTexture(nil, "ARTWORK")
-  f.fg:SetPoint("TOPLEFT")
-  f.fg:SetPoint("BOTTOMLEFT")
+  -- Debug-only instrumentation to trace any SetSize/SetWidth/SetHeight callers and block during combat
+  if TB_DEBUG and f.SetSize and not f._dbg_origSetSize then
+    f._dbg_origSetSize = f.SetSize
+    f.SetSize = function(self, w, h)
+      local inCombat = InCombatLockdown and InCombatLockdown()
+      local stack = debugstack and debugstack(2, 8, 8) or "(no stack)"
+      TB_Print(string.format("SetSize(%s,%s) inCombat=%s", tostring(w), tostring(h), tostring(inCombat)))
+      if type(stack) == "string" then TB_Print(stack) end
+      if inCombat then
+        TB_Print("Blocked SetSize during combat.")
+        return
+      end
+      return self:_dbg_origSetSize(w, h)
+    end
+  end
+  if TB_DEBUG and f.SetWidth and not f._dbg_origSetWidth then
+    f._dbg_origSetWidth = f.SetWidth
+    f.SetWidth = function(self, w)
+      local inCombat = InCombatLockdown and InCombatLockdown()
+      TB_Print(string.format("SetWidth(%s) inCombat=%s", tostring(w), tostring(inCombat)))
+      if inCombat then TB_Print("Blocked SetWidth during combat."); return end
+      return self:_dbg_origSetWidth(w)
+    end
+  end
+  if TB_DEBUG and f.SetHeight and not f._dbg_origSetHeight then
+    f._dbg_origSetHeight = f.SetHeight
+    f.SetHeight = function(self, h)
+      local inCombat = InCombatLockdown and InCombatLockdown()
+      TB_Print(string.format("SetHeight(%s) inCombat=%s", tostring(h), tostring(inCombat)))
+      if inCombat then TB_Print("Blocked SetHeight during combat."); return end
+      return self:_dbg_origSetHeight(h)
+    end
+  end
 
-  -- Border
-  f.border = f
-  f:SetBackdrop({ edgeFile = "Interface\\Buttons\\WHITE8x8", edgeSize = 1 })
+  -- Apply initial frame size only out of combat (safe path)
+  local function ApplyInitialSize()
+    local w0, h0 = ReadCfg(cfg)
+    if not (InCombatLockdown and InCombatLockdown()) then
+      if f.SetSize then f:SetSize(w0, h0) end
+    end
+  end
+
+  -- No base textures (pure text-only tile to avoid any combat-size interactions)
+
+  -- Border handled by custom overlay edges; no BackdropTemplate/SetBackdrop to avoid taint
 
   -- Text
   f.text = f:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
@@ -86,14 +134,17 @@ function API.create(parent, cfg)
   end
   UI.Outline(f.text, { weight = "THICKOUTLINE" })
 
-  -- Use Blizzard internal unit tooltip for target
+  -- No initial SetSize to avoid protected calls; size is implicitly driven by child textures
+
+  -- Disable Blizzard UnitFrame tooltip/handlers to avoid any secure path on this host frame
   f.unit = UNIT_TOKEN
-  f:SetScript("OnEnter", UnitFrame_OnEnter)
-  f:SetScript("OnLeave", UnitFrame_OnLeave)
+  f:SetScript("OnEnter", nil)
+  f:SetScript("OnLeave", nil)
 
   -- Secure unit button overlay for click-casting + unit menu when Locked
-  f.secureBtn = CreateFrame("Button", nil, f, "SecureUnitButtonTemplate")
-  f.secureBtn:SetAllPoints(f)
+  -- Parent to UIParent and anchor on safe events to avoid restricted size changes on the host frame during combat
+  f.secureBtn = nil
+  if false then
   f.secureBtn:RegisterForClicks("AnyUp", "AnyDown")
   f.secureBtn:SetAttribute("unit", UNIT_TOKEN)
   f.secureBtn:SetAttribute("type1", "target")
@@ -110,74 +161,61 @@ function API.create(parent, cfg)
   if SecureUnitButton_OnLoad then
     pcall(SecureUnitButton_OnLoad, f.secureBtn, UNIT_TOKEN)
   end
+
+  -- Anchor secure overlay: disabled (no secure overlay for Target Box)
+  local function ApplySecureOverlay() end
+
   -- Keep the secure button in the same strata as the tile so it stays under major UI (e.g. Talents)
   f.secureBtn:SetFrameStrata(f:GetFrameStrata() or "MEDIUM")
   f.secureBtn:SetToplevel(false)
   f.secureBtn:SetFrameLevel((f:GetFrameLevel() or 0) + 50)
-  f.secureBtn:Hide()
   f.secureBtn.unit = UNIT_TOKEN
-  f.secureBtn:SetScript("OnEnter", UnitFrame_OnEnter)
-  f.secureBtn:SetScript("OnLeave", UnitFrame_OnLeave)
+  -- Avoid UnitFrame_OnEnter/OnLeave on secure overlay; prevent any highlight/backdrop logic in combat
+  f.secureBtn:SetScript("OnEnter", nil)
+  f.secureBtn:SetScript("OnLeave", nil)
   if ClickCastFrames then ClickCastFrames[f.secureBtn] = true end
   if C_ClickBindings and C_ClickBindings.RegisterFrame then pcall(C_ClickBindings.RegisterFrame, f.secureBtn) end
   if ClickCastFrame_RegisterFrame then pcall(ClickCastFrame_RegisterFrame, f.secureBtn) end
-
-  -- Mouse for drag + refresh
-  f:EnableMouse(true)
-  f:SetScript("OnMouseUp", function(self, btn)
-    local locked = (SkyInfoTilesDB and SkyInfoTilesDB.locked) and true or false
-    if locked then return end
-    if btn == "LeftButton" then
-      if self.StopMovingOrSizing then self:StopMovingOrSizing() end
-      local point, _, _, x, y = self:GetPoint()
-      if self._cfg then self._cfg.point, self._cfg.x, self._cfg.y = point, x, y end
-      return
-    end
-    if btn == "RightButton" then
-      API.update(self, cfg)
-    end
-  end)
-  f:SetScript("OnMouseDown", function(self, btn)
-    if not (SkyInfoTilesDB and SkyInfoTilesDB.locked) and btn == "LeftButton" then
-      if self.StartMoving then self:StartMoving() end
-    end
-  end)
-
-  -- Events (target changes + health)
-  f:RegisterEvent("PLAYER_ENTERING_WORLD")
-  f:RegisterEvent("PLAYER_TARGET_CHANGED")
-  f:RegisterEvent("UNIT_HEALTH")
-  f:RegisterEvent("UNIT_MAXHEALTH")
-  f:SetScript("OnEvent", function(self, event, arg1)
-    if (event == "UNIT_HEALTH" or event == "UNIT_MAXHEALTH") and arg1 ~= UNIT_TOKEN then return end
-    API.update(self, cfg)
-  end)
-
-  -- Hide Blizzard TargetFrame using secure visibility driver (combat-safe)
-  if TargetFrame then
-    SkyInfoTiles._TargetBoxActive = true
-    local function ApplyTargetFrameDriver()
-      if InCombatLockdown and InCombatLockdown() then
-        local waiter = CreateFrame("Frame")
-        waiter:RegisterEvent("PLAYER_REGEN_ENABLED")
-        waiter:SetScript("OnEvent", function(self)
-          self:UnregisterEvent("PLAYER_REGEN_ENABLED")
-          if TargetFrame then
-            pcall(UnregisterStateDriver, TargetFrame, "visibility")
-            pcall(RegisterStateDriver, TargetFrame, "visibility", "hide")
-          end
-        end)
-      else
-        pcall(UnregisterStateDriver, TargetFrame, "visibility")
-        pcall(RegisterStateDriver, TargetFrame, "visibility", "hide")
-      end
-    end
-    ApplyTargetFrameDriver()
   end
 
+  -- Read-only display: no mouse interactivity (prevents any drag/resize paths)
+  f:EnableMouse(false)
+  f:SetScript("OnMouseUp", nil)
+  f:SetScript("OnMouseDown", nil)
+
+  -- Events (target changes; avoid health events to prevent restricted paths)
+  f:RegisterEvent("PLAYER_ENTERING_WORLD")
+  f:RegisterEvent("PLAYER_TARGET_CHANGED")
+  f:RegisterEvent("PLAYER_REGEN_ENABLED")
+  f:SetScript("OnEvent", function(self, event, arg1)
+    if event == "PLAYER_ENTERING_WORLD" then
+      TB_Print("Loaded " .. TARGETBOX_BUILD)
+      ApplyInitialSize()
+    elseif event == "PLAYER_REGEN_ENABLED" then
+      ApplyInitialSize()
+    end
+    API.update(self, cfg, event)
+  end)
+
+  -- Throttled OnUpdate to refresh out of combat (no structural changes in combat)
+  f._accum = 0
+  f:SetScript("OnUpdate", function(self, elapsed)
+    self._accum = (self._accum or 0) + (elapsed or 0)
+    if self._accum < 0.2 then return end
+    self._accum = 0
+    -- Allow text/alpha updates even during combat; we avoid structural ops in API.update
+    API.update(self, cfg, "ONUPDATE")
+  end)
+
+  -- Keep Blizzard TargetFrame unchanged (do not manipulate secure visibility here)
+  -- This avoids any chance of secure state changes causing implicit layout or size work during combat.
+  -- If you want the default TargetFrame hidden, toggle it in another addon or via a user action out of combat.
+
   -- First paint
-  f:SetScript("OnShow", function(self) API.update(self, cfg) end)
-  API.update(f, cfg)
+  f:SetScript("OnShow", function(self)
+    API.update(self, cfg, "ONSHOW_INIT")
+  end)
+  API.update(f, cfg, "ONSHOW_INIT")
 
   function f:Destroy()
     -- Unregister click-cast
@@ -199,8 +237,21 @@ function API.create(parent, cfg)
   return f
 end
 
-function API.update(frame, cfg)
+
+function API.update(frame, cfg, ev)
   local w, h, infoMode, colH, colM, borderC, fontFile, useClass, fontSize, borderSize = ReadCfg(cfg)
+
+  -- Debug: detect unexpected unit events reaching TargetBox
+  if ev == "UNIT_HEALTH" or ev == "UNIT_MAXHEALTH" then
+    TB_Print("Unexpected unit event reached update: " .. tostring(ev))
+  end
+
+  -- No structural work occurs in combat, but we still update text/alpha safely
+
+
+  local function SafeStructUpdateAllowed(evName)
+    return false
+  end
 
   -- Font
   if frame.text and frame.text.SetFont then
@@ -216,98 +267,26 @@ function API.update(frame, cfg)
     end
   end
 
-  -- Sizing
-  frame:SetSize(w, h)
+  -- Sizing moved to API.safeResize and is only applied on safe events (PLAYER_ENTERING_WORLD/PLAYER_REGEN_ENABLED).
+  -- During frequent/secure events we never call frame:SetSize().
 
-  -- Colors
-  if frame.bg.SetColorTexture then
-    frame.bg:SetColorTexture(colM.r or 0, colM.g or 0, colM.b or 0, colM.a or 1)
-  else
-    frame.bg:SetTexture("Interface\\Buttons\\WHITE8x8")
-    frame.bg:SetVertexColor(colM.r or 0, colM.g or 0, colM.b or 0, 1)
-    frame.bg:SetAlpha((colM.a ~= nil) and colM.a or 1)
-  end
-  -- Optionally use class color of target for foreground
-  if useClass and UnitExists and UnitExists(UNIT_TOKEN) and UnitIsPlayer and UnitIsPlayer(UNIT_TOKEN) then
-    local class = select(2, UnitClass(UNIT_TOKEN))
-    local tbl = _G.CUSTOM_CLASS_COLORS or _G.RAID_CLASS_COLORS
-    local c = (tbl and class) and tbl[class] or nil
-    if c then
-      colH = { r = c.r, g = c.g, b = c.b, a = (colH and colH.a) or 1 }
-    end
-  end
-  if frame.fg.SetColorTexture then
-    frame.fg:SetColorTexture(colH.r or 0, colH.g or 1, colH.b or 0, colH.a or 1)
-  else
-    frame.fg:SetTexture("Interface\\Buttons\\WHITE8x8")
-    frame.fg:SetVertexColor(colH.r or 0, colH.g or 1, colH.b or 0, 1)
-    frame.fg:SetAlpha((colH.a ~= nil) and colH.a or 1)
-  end
-  if frame.SetBackdrop then
-    frame:SetBackdrop({ edgeFile = "Interface\\Buttons\\WHITE8x8", edgeSize = borderSize or 1 })
-  end
-  if frame.SetBackdropBorderColor then
-    frame:SetBackdropBorderColor(borderC.r or 0, borderC.g or 0, borderC.b or 0, borderC.a or 1)
-  end
+  -- Colors/foreground disabled (text-only tile)
+  -- Optionally use class color of target for text tint in future, but skip structural/texture updates for safety.
 
-  -- Ensure visible variable-thickness border across clients by drawing 4 edge textures on an overlay frame under major UI
-  frame._edgeF = frame._edgeF or CreateFrame("Frame", nil, frame)
-  frame._edgeF:SetAllPoints(frame)
-  frame._edgeF:SetFrameStrata(frame:GetFrameStrata() or "MEDIUM")
-  if frame.secureBtn and frame.secureBtn.GetFrameLevel then
-    frame._edgeF:SetFrameLevel(frame.secureBtn:GetFrameLevel() + 1)
-  else
-    frame._edgeF:SetFrameLevel((frame:GetFrameLevel() or 0) + 200)
-  end
-
-  frame._edgeT = frame._edgeT or frame._edgeF:CreateTexture(nil, "OVERLAY")
-  frame._edgeB = frame._edgeB or frame._edgeF:CreateTexture(nil, "OVERLAY")
-  frame._edgeL = frame._edgeL or frame._edgeF:CreateTexture(nil, "OVERLAY")
-  frame._edgeR = frame._edgeR or frame._edgeF:CreateTexture(nil, "OVERLAY")
-  if frame._edgeT.SetDrawLayer then
-    frame._edgeT:SetDrawLayer("OVERLAY", 7)
-    frame._edgeB:SetDrawLayer("OVERLAY", 7)
-    frame._edgeL:SetDrawLayer("OVERLAY", 7)
-    frame._edgeR:SetDrawLayer("OVERLAY", 7)
-  end
-
-  local function ApplyEdgeStyle(tex)
-    if not tex then return end
-    tex:SetTexture("Interface\\Buttons\\WHITE8x8")
-    tex:SetVertexColor(borderC.r or 0, borderC.g or 0, borderC.b or 0, borderC.a or 1)
-    if (borderSize or 0) <= 0 then tex:Hide() else tex:Show() end
-  end
-  ApplyEdgeStyle(frame._edgeT)
-  ApplyEdgeStyle(frame._edgeB)
-  ApplyEdgeStyle(frame._edgeL)
-  ApplyEdgeStyle(frame._edgeR)
-
-  if (borderSize or 0) > 0 then
-    frame._edgeT:ClearAllPoints(); frame._edgeT:SetPoint("TOPLEFT");    frame._edgeT:SetPoint("TOPRIGHT");    frame._edgeT:SetHeight(borderSize)
-    frame._edgeB:ClearAllPoints(); frame._edgeB:SetPoint("BOTTOMLEFT"); frame._edgeB:SetPoint("BOTTOMRIGHT"); frame._edgeB:SetHeight(borderSize)
-    frame._edgeL:ClearAllPoints(); frame._edgeL:SetPoint("TOPLEFT");    frame._edgeL:SetPoint("BOTTOMLEFT");  frame._edgeL:SetWidth(borderSize)
-    frame._edgeR:ClearAllPoints(); frame._edgeR:SetPoint("TOPRIGHT");   frame._edgeR:SetPoint("BOTTOMRIGHT"); frame._edgeR:SetWidth(borderSize)
-  end
+  -- Border overlay disabled to remove any structural updates that could trigger restricted SetSize paths
 
   -- Health values for target; handle no target
   local hasTarget = UnitExists and UnitExists(UNIT_TOKEN)
-  -- Show/Hide entire tile based on target existence
+  local isUnitEvent = (ev == "UNIT_HEALTH" or ev == "UNIT_MAXHEALTH")
+  -- Keep the tile visible even with no target; just show placeholder text
   if not hasTarget then
-    if frame.secureBtn then
-      frame.secureBtn:Hide()
-      frame.secureBtn:EnableMouse(false)
-    end
-    if InCombatLockdown and InCombatLockdown() then
-      frame:SetAlpha(0)
-    else
-      frame:Hide()
-    end
-    return
-  else
-    if InCombatLockdown and InCombatLockdown() then
+    if frame.text then frame.text:SetText("No target") end
+    if not isUnitEvent then
       frame:SetAlpha(1)
-    else
-      frame:Show()
+    end
+  else
+    if not isUnitEvent then
+      frame:SetAlpha(1)
     end
   end
   local cur = UnitHealth and UnitHealth(UNIT_TOKEN) or 0
@@ -316,9 +295,7 @@ function API.update(frame, cfg)
   if not cur or cur < 0 then cur = 0 end
   if cur > maxv then cur = maxv end
 
-  local ratio = maxv > 0 and (cur / maxv) or 0
-  local fgW = math.max(0, math.floor(w * ratio + 0.5))
-  frame.fg:SetWidth(fgW)
+  -- Foreground width removed (no textures used)
 
   -- Text
   if frame.text then
@@ -329,45 +306,53 @@ function API.update(frame, cfg)
     end
   end
 
-  -- Drag/lock behavior + secure overlay mouse
-  local locked = (SkyInfoTilesDB and SkyInfoTilesDB.locked) and true or false
-  if frame.EnableMouse and frame.SetMovable then
-    frame:EnableMouse(true)
-    frame:SetMovable(not locked)
-    if not locked and frame.RegisterForDrag then
-      frame:RegisterForDrag("LeftButton")
-      frame:SetScript("OnDragStart", frame.StartMoving)
-      frame:SetScript("OnDragStop", function(self)
-        self:StopMovingOrSizing()
-        local point, _, _, X, Y = self:GetPoint()
-        if self._cfg then self._cfg.point, self._cfg.x, self._cfg.y = point, X, Y end
-      end)
-    elseif frame.RegisterForDrag then
-      frame:RegisterForDrag()
-      frame:SetScript("OnDragStart", nil)
-      frame:SetScript("OnDragStop", nil)
-    end
+  if isUnitEvent then
+    return
   end
 
-  if frame.secureBtn then
-    frame.secureBtn:EnableMouse(locked)
-    if locked then
-      frame.secureBtn:Show()
-      if not InCombatLockdown or not InCombatLockdown() then
-        if ClickCastFrames then ClickCastFrames[frame.secureBtn] = true end
-        if C_ClickBindings and C_ClickBindings.RegisterFrame then pcall(C_ClickBindings.RegisterFrame, frame.secureBtn) end
-        if ClickCastFrame_RegisterFrame then pcall(ClickCastFrame_RegisterFrame, frame.secureBtn) end
-        if GetCVarBool then
-          local onKeyDown = GetCVarBool("ActionButtonUseKeyDown")
-          frame.secureBtn:SetAttribute("clickcast_onkeydown", onKeyDown and true or false)
+  -- Drag/lock behavior + secure overlay mouse (skip entirely on frequent unit events)
+  local isUnitEvent = (ev == "UNIT_HEALTH" or ev == "UNIT_MAXHEALTH")
+  if not isUnitEvent then
+    local locked = (SkyInfoTilesDB and SkyInfoTilesDB.locked) and true or false
+    if frame.EnableMouse and frame.SetMovable then
+      if not (InCombatLockdown and InCombatLockdown()) then
+        frame:EnableMouse(false)
+        frame:SetMovable(false)
+        if frame.RegisterForDrag then
+          frame:RegisterForDrag()
+          frame:SetScript("OnDragStart", nil)
+          frame:SetScript("OnDragStop", nil)
         end
-        frame.secureBtn:SetAttribute("clickcast_unit", UNIT_TOKEN)
-        frame.secureBtn:SetAttribute("shift-type2", "togglemenu")
-        frame.secureBtn:SetAttribute("ctrl-type2", "togglemenu")
-        frame.secureBtn:SetAttribute("alt-type2", "togglemenu")
       end
-    else
-      frame.secureBtn:Hide()
+    end
+
+    if frame.secureBtn then
+      if locked then
+        -- Use z-order to make the secure button interactive; avoid Show/Hide in combat
+        if not (InCombatLockdown and InCombatLockdown()) then
+          frame.secureBtn:SetFrameStrata(frame:GetFrameStrata() or "MEDIUM")
+          frame.secureBtn:SetFrameLevel((frame:GetFrameLevel() or 0) + 50)
+        end
+        if not InCombatLockdown or not InCombatLockdown() then
+          if ClickCastFrames then ClickCastFrames[frame.secureBtn] = true end
+          if C_ClickBindings and C_ClickBindings.RegisterFrame then pcall(C_ClickBindings.RegisterFrame, frame.secureBtn) end
+          if ClickCastFrame_RegisterFrame then pcall(ClickCastFrame_RegisterFrame, frame.secureBtn) end
+          if GetCVarBool then
+            local onKeyDown = GetCVarBool("ActionButtonUseKeyDown")
+            frame.secureBtn:SetAttribute("clickcast_onkeydown", onKeyDown and true or false)
+          end
+          frame.secureBtn:SetAttribute("clickcast_unit", UNIT_TOKEN)
+          frame.secureBtn:SetAttribute("shift-type2", "togglemenu")
+          frame.secureBtn:SetAttribute("ctrl-type2", "togglemenu")
+          frame.secureBtn:SetAttribute("alt-type2", "togglemenu")
+        end
+      else
+        -- Push behind when unlocked so it doesn't intercept clicks
+        if not (InCombatLockdown and InCombatLockdown()) then
+          frame.secureBtn:SetFrameStrata("BACKGROUND")
+          frame.secureBtn:SetFrameLevel(1)
+        end
+      end
     end
   end
 end

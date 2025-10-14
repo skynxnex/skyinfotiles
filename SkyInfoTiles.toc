@@ -4,6 +4,7 @@
 ## Author: You
 ## Version: 1.4.0
 ## SavedVariables: SkyInfoTilesDB
+## OptionalDeps: LibSharedMedia-3.0
 
 SkyInfoTiles.lua
 modules\Options.lua

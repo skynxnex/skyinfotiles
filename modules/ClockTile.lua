@@ -28,16 +28,31 @@ local function ReadCfg(cfg)
   return fontFile, size, outline, color
 end
 
-local function ApplyTextStyle(fs, fontFile, size, outline, color)
-  if not fs then return end
-  local ok = fs:SetFont(fontFile or DEFAULT_FONT, size or DEFAULT_SIZE, outline or "")
-  if not ok then
-    if STANDARD_TEXT_FONT then
-      fs:SetFont(STANDARD_TEXT_FONT, size or DEFAULT_SIZE, outline or "")
-    else
-      fs:SetFont(DEFAULT_FONT, size or DEFAULT_SIZE, outline or "")
+local function SetFontSmart(fs, file, size, flags)
+  local tries = {}
+  if type(file) == "string" and file ~= "" then
+    table.insert(tries, file)
+    local upperExt = file:gsub("%.ttf$", ".TTF")
+    if upperExt ~= file then table.insert(tries, upperExt) end
+  end
+  table.insert(tries, DEFAULT_FONT)
+  if STANDARD_TEXT_FONT then table.insert(tries, STANDARD_TEXT_FONT) end
+  -- Known built-in fonts
+  table.insert(tries, "Fonts\\FRIZQT__.TTF")
+  table.insert(tries, "Fonts\\ARIALN.TTF")
+  table.insert(tries, "Fonts\\MORPHEUS.ttf")
+  table.insert(tries, "Fonts\\SKURRI.ttf")
+  for _, path in ipairs(tries) do
+    if fs:SetFont(path, size or DEFAULT_SIZE, flags or "") then
+      return true, path
     end
   end
+  return false, nil
+end
+
+local function ApplyTextStyle(fs, fontFile, size, outline, color)
+  if not fs then return end
+  SetFontSmart(fs, fontFile or DEFAULT_FONT, size or DEFAULT_SIZE, outline or "")
   if UI and UI.Outline then
     -- Re-apply outline weight to ensure shadow/outline behavior is consistent with addon
     UI.Outline(fs, { weight = outline, size = size })
@@ -59,7 +74,7 @@ function API.create(parent, cfg)
   local f = CreateFrame("Frame", nil, parent)
 
   -- Text
-  f.text = f:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+  f.text = f:CreateFontString(nil, "OVERLAY")
   f.text:SetPoint("CENTER")
   f.text:SetJustifyH("CENTER")
   f.text:SetJustifyV("MIDDLE")

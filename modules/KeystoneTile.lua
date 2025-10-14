@@ -478,7 +478,7 @@ function API.create(parent, cfg)
     btn:SetPoint("TOPLEFT", f, "TOPLEFT", 8, -8)
     btn:SetSize(ICON_SIZE, ICON_SIZE)
     btn:RegisterForClicks("AnyDown", "AnyUp")      -- left/right on down/up (covers keydown cvar)
-    btn:EnableMouse(true)
+    -- Avoid toggling EnableMouse on secure buttons to prevent taint; use Show/Hide only
     btn:SetAttribute("type", nil)
     btn:SetFrameStrata("HIGH")
     btn:SetToplevel(true)
@@ -502,7 +502,6 @@ function API.create(parent, cfg)
       BindTeleportToButton(btn, info.name)
     end
     local locked = (SkyInfoTilesDB and SkyInfoTilesDB.locked) and true or false
-    btn:EnableMouse(locked)
   end
   -- Create immediately if safe, or defer until out of combat
   if InCombatLockdown and InCombatLockdown() then
@@ -599,10 +598,17 @@ function API.update(frame, cfg)
   -- Enable teleport click only when Locked (so Unlocked can drag the tile)
   local locked = (SkyInfoTilesDB and SkyInfoTilesDB.locked) and true or false
   if frame.cast then
-    -- Avoid protected calls on secure buttons during combat
-    if not (InCombatLockdown and InCombatLockdown()) then
-      frame.cast:EnableMouse(locked)
-      if locked then frame.cast:Show() else frame.cast:Hide() end
+    -- Use z-order to control interactivity; avoid Show/Hide to prevent taint
+    if locked then
+      if not (InCombatLockdown and InCombatLockdown()) then
+        frame.cast:SetFrameStrata(frame:GetFrameStrata() or "MEDIUM")
+        frame.cast:SetFrameLevel((frame:GetFrameLevel() or 0) + 100)
+      end
+    else
+      if not (InCombatLockdown and InCombatLockdown()) then
+        frame.cast:SetFrameStrata("BACKGROUND")
+        frame.cast:SetFrameLevel(1)
+      end
     end
   end
   -- Ensure the base frame is draggable when unlocked (avoid protected mouse changes during combat)

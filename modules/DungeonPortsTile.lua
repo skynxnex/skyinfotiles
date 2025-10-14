@@ -195,7 +195,7 @@ function API.create(parent, cfg)
       btn:SetPoint("TOPLEFT", f, "TOPLEFT", offX, offY)
       btn:SetSize(ICON_SIZE, ICON_SIZE)
       btn:RegisterForClicks("AnyDown", "AnyUp")
-      btn:EnableMouse(true)
+      -- Avoid calling EnableMouse on secure buttons to prevent taint; use Show/Hide control instead
       btn:SetFrameStrata("HIGH")
       btn:SetToplevel(true)
       btn:SetFrameLevel((f:GetFrameLevel() or 0) + 100)
@@ -268,7 +268,7 @@ function API.create(parent, cfg)
             btn:SetPoint("TOPLEFT", self, "TOPLEFT", offX, offY)
             btn:SetSize(ICON_SIZE, ICON_SIZE)
             btn:RegisterForClicks("AnyDown", "AnyUp")
-            btn:EnableMouse(true)
+            -- Avoid calling EnableMouse on secure buttons to prevent taint; use Show/Hide control instead
             btn:SetFrameStrata("HIGH")
             btn:SetToplevel(true)
             btn:SetFrameLevel((self:GetFrameLevel() or 0) + 100)
@@ -434,12 +434,18 @@ function API.update(frame, cfg)
       end
     end
 
-    -- Enable/disable mouse on overlay by lock + known state
+    -- Interactivity via z-order only (avoid protected calls during combat)
     if cell.button then
-      -- Avoid protected calls on secure buttons during combat
       if not (InCombatLockdown and InCombatLockdown()) then
-        cell.button:EnableMouse(locked and known)
-        if locked then cell.button:Show() else cell.button:Hide() end
+        if locked and known then
+          -- Bring overlay above the tile to receive clicks
+          cell.button:SetFrameStrata(frame:GetFrameStrata() or "MEDIUM")
+          cell.button:SetFrameLevel((frame:GetFrameLevel() or 0) + 100)
+        else
+          -- Push overlay behind so base frame receives clicks; appears inert/hidden to mouse
+          cell.button:SetFrameStrata("BACKGROUND")
+          cell.button:SetFrameLevel(1)
+        end
       end
     end
 
