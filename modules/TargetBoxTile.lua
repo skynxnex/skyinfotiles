@@ -12,7 +12,7 @@ local function TB_Print(msg)
   end
 end
 
-local TB_DEBUG = true -- instrumentation; set to false after validation
+local TB_DEBUG = false -- instrumentation; disabled for release on 12.0
 
 -- Defaults (mirrors HealthBoxTile)
 local DEFAULT_W = 220

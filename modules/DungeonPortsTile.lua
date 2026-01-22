@@ -252,6 +252,15 @@ function API.create(parent, cfg)
   f:RegisterEvent("UNIT_SPELLCAST_SUCCEEDED")
   f:SetScript("OnEvent", function(self, event)
     if event == "PLAYER_REGEN_ENABLED" then
+      -- Apply any pending scale changes now that we're out of combat
+      if self._pendingScale and self.SetScale then
+        local sc = self._pendingScale
+        self._pendingScale = nil
+        if self._appliedScale ~= sc then
+          self:SetScale(sc)
+          self._appliedScale = sc
+        end
+      end
       -- Create any pending secure buttons and (re)bind
       for _, cell in ipairs(self.cells or {}) do
         if cell._pendingCreate then
@@ -331,7 +340,53 @@ function API.create(parent, cfg)
   f:SetScript("OnShow", function(self) API.update(self, cfg) end)
   API.update(f, cfg)
 
-  function f:Destroy() end
+  function f:Destroy()
+    -- Avoid destroying during combat; core defers rebuilds in lockdown.
+    if InCombatLockdown and InCombatLockdown() then return end
+
+    -- Stop reacting to events and scripts
+    if self.UnregisterAllEvents then self:UnregisterAllEvents() end
+    if self.SetScript then
+      self:SetScript("OnEvent", nil)
+      self:SetScript("OnShow", nil)
+      self:SetScript("OnMouseDown", nil)
+      self:SetScript("OnMouseUp", nil)
+    end
+
+    -- Clean up child widgets to ensure no stray frames keep updating
+    for _, cell in ipairs(self.cells or {}) do
+      if cell.button then
+        if cell.button.UnregisterAllEvents then cell.button:UnregisterAllEvents() end
+        if cell.button.SetScript then
+          cell.button:SetScript("OnEnter", nil)
+          cell.button:SetScript("OnLeave", nil)
+        end
+        if cell.button.Hide then cell.button:Hide() end
+        if cell.button.SetParent then cell.button:SetParent(nil) end
+        cell.button = nil
+      end
+      if cell.cooldown then
+        if cell.cooldown.Hide then cell.cooldown:Hide() end
+        if cell.cooldown.SetParent then cell.cooldown:SetParent(nil) end
+        cell.cooldown = nil
+      end
+      if cell.border then
+        if cell.border.Hide then cell.border:Hide() end
+        if cell.border.SetParent then cell.border:SetParent(nil) end
+        cell.border = nil
+      end
+      if cell.icon then
+        if cell.icon.SetTexture then cell.icon:SetTexture(nil) end
+        if cell.icon.Hide then cell.icon:Hide() end
+        if cell.icon.SetParent then cell.icon:SetParent(nil) end
+        cell.icon = nil
+      end
+    end
+
+    self.cells = nil
+    if self.Hide then self:Hide() end
+    if self.SetParent then self:SetParent(nil) end
+  end
   return f
 end
 
@@ -405,6 +460,21 @@ function API.update(frame, cfg)
   end
   -- Update icons, bind spells, update cooldowns, lock/unlock behavior
   local locked = (SkyInfoTilesDB and SkyInfoTilesDB.locked) and true or false
+
+  -- Apply per-tile scale (0.5 - 2.0), consistent with /skytiles scale support
+  local sc = (cfg and tonumber(cfg.scale)) or 1
+  if sc < 0.5 then sc = 0.5 elseif sc > 2.0 then sc = 2.0 end
+  if frame.SetScale then
+    if InCombatLockdown and InCombatLockdown() then
+      frame._pendingScale = sc
+    else
+      if frame._appliedScale ~= sc then
+        frame:SetScale(sc)
+        frame._appliedScale = sc
+        frame._pendingScale = nil
+      end
+    end
+  end
 
   for i, cell in ipairs(frame.cells or {}) do
     local d = DUNGEONS[i]

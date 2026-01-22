@@ -140,9 +140,16 @@ function API.create(parent, cfg)
   f.secureBtn:SetAttribute("ctrl-type2", "togglemenu")
   f.secureBtn:SetAttribute("alt-type2", "togglemenu")
   -- Inform Click Casting about press behavior and explicit unit
-  if GetCVarBool then
-    local onKeyDown = GetCVarBool("ActionButtonUseKeyDown")
-    f.secureBtn:SetAttribute("clickcast_onkeydown", onKeyDown and true or false)
+  do
+    local onKeyDown = nil
+    if C_CVar and C_CVar.GetCVarBool then
+      onKeyDown = C_CVar.GetCVarBool("ActionButtonUseKeyDown")
+    elseif GetCVarBool then
+      onKeyDown = GetCVarBool("ActionButtonUseKeyDown")
+    end
+    if onKeyDown ~= nil then
+      f.secureBtn:SetAttribute("clickcast_onkeydown", onKeyDown and true or false)
+    end
   end
   f.secureBtn:SetAttribute("clickcast_unit", "player")
   -- Help older click-cast code paths that read .unit instead of the attribute
@@ -431,9 +438,16 @@ function API.update(frame, cfg)
         if ClickCastFrames then ClickCastFrames[frame.secureBtn] = true end
         if C_ClickBindings and C_ClickBindings.RegisterFrame then pcall(C_ClickBindings.RegisterFrame, frame.secureBtn) end
         if ClickCastFrame_RegisterFrame then pcall(ClickCastFrame_RegisterFrame, frame.secureBtn) end
-        if GetCVarBool then
-          local onKeyDown = GetCVarBool("ActionButtonUseKeyDown")
-          frame.secureBtn:SetAttribute("clickcast_onkeydown", onKeyDown and true or false)
+        do
+          local onKeyDown = nil
+          if C_CVar and C_CVar.GetCVarBool then
+            onKeyDown = C_CVar.GetCVarBool("ActionButtonUseKeyDown")
+          elseif GetCVarBool then
+            onKeyDown = GetCVarBool("ActionButtonUseKeyDown")
+          end
+          if onKeyDown ~= nil then
+            frame.secureBtn:SetAttribute("clickcast_onkeydown", onKeyDown and true or false)
+          end
         end
         frame.secureBtn:SetAttribute("clickcast_unit", "player")
         frame.secureBtn:SetAttribute("shift-type2", "togglemenu")

@@ -567,7 +567,60 @@ function API.create(parent, cfg)
   API.update(f, cfg)
 
 
-  function f:Destroy() end
+  function f:Destroy()
+    -- Defer cleanup while in combat; core will call rebuild again after lockdown
+    if InCombatLockdown and InCombatLockdown() then return end
+
+    -- Stop reacting to events and clear handlers
+    if self.UnregisterAllEvents then self:UnregisterAllEvents() end
+    if self.SetScript then
+      self:SetScript("OnEvent", nil)
+      self:SetScript("OnShow", nil)
+      self:SetScript("OnMouseDown", nil)
+      self:SetScript("OnMouseUp", nil)
+    end
+
+    -- Secure cast button overlay
+    if self.cast then
+      if self.cast.UnregisterAllEvents then self.cast:UnregisterAllEvents() end
+      if self.cast.SetScript then
+        self.cast:SetScript("OnEnter", nil)
+        self.cast:SetScript("OnLeave", nil)
+      end
+      if self.cast.Hide then self.cast:Hide() end
+      if self.cast.SetParent then self.cast:SetParent(nil) end
+      self.cast = nil
+    end
+
+    -- Borders / textures
+    if self.iconBorder then
+      if self.iconBorder.Hide then self.iconBorder:Hide() end
+      if self.iconBorder.SetParent then self.iconBorder:SetParent(nil) end
+      self.iconBorder = nil
+    end
+    if self.icon then
+      if self.icon.SetTexture then self.icon:SetTexture(nil) end
+      if self.icon.Hide then self.icon:Hide() end
+      if self.icon.SetParent then self.icon:SetParent(nil) end
+      self.icon = nil
+    end
+
+    -- FontStrings
+    local fields = { "level", "name", "subtitle" }
+    for _, k in ipairs(fields) do
+      local fs = self[k]
+      if fs then
+        if fs.SetText then fs:SetText("") end
+        if fs.Hide then fs:Hide() end
+        if fs.SetParent then fs:SetParent(nil) end
+        self[k] = nil
+      end
+    end
+
+    -- Finalize
+    if self.Hide then self:Hide() end
+    if self.SetParent then self:SetParent(nil) end
+  end
   return f
 end
 

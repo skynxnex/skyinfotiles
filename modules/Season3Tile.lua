@@ -2,7 +2,11 @@ local ADDON_NAME = ...
 local SkyInfoTiles = _G[ADDON_NAME]
 local UI = SkyInfoTiles.UI
 
--- Season 3 currencies (uiName must match the in-game Currency panel line)
+-- Seasonal currencies:
+-- Each entry may specify either:
+--   - uiName = the exact localized name shown in the in-game Currency panel (legacy support)
+--   - id     = currencyID (preferred; resilient across seasons/clients)
+-- If both are present, 'id' takes precedence.
 local CURRENCIES = {
   { uiName = "Valorstones",              label = "Valorstones" },
   { uiName = "Weathered Ethereal Crest", label = "Weathered Ethereal Crest" },
@@ -58,24 +62,45 @@ local function ReadDetails(currencyID)
   local ci = C_CurrencyInfo.GetCurrencyInfo and C_CurrencyInfo.GetCurrencyInfo(currencyID)
   if not ci then return nil end
   return {
-    name                 = ci.name,
-    maxQuantity          = ci.maxQuantity,
-    canEarnPerWeek       = ci.canEarnPerWeek,
-    maxWeeklyQuantity    = ci.maxWeeklyQuantity,
+    name                   = ci.name,
+    quantity               = ci.quantity,
+    maxQuantity            = ci.maxQuantity,
+    canEarnPerWeek         = ci.canEarnPerWeek,
+    maxWeeklyQuantity      = ci.maxWeeklyQuantity,
     quantityEarnedThisWeek = ci.quantityEarnedThisWeek,
-    iconFileID           = ci.iconFileID,
+    iconFileID             = ci.iconFileID,
+    currencyTypesID        = currencyID,
   }
 end
 
 local function BuildLine(entry)
-  -- 1) Quantity/icon as shown by the Currency UI list
-  local qty, iconID, cid = FindInCurrencyListByName(entry.uiName)
+  local qty, iconID, cid, label
 
-  -- 2) Details (season cap, weekly progress)
-  local det = ReadDetails(cid)
+  -- Prefer ID-based read when provided (more robust across seasons/locales)
+  if entry.id and C_CurrencyInfo and C_CurrencyInfo.GetCurrencyInfo then
+    local ci = C_CurrencyInfo.GetCurrencyInfo(entry.id)
+    if ci then
+      qty = ci.quantity or 0
+      iconID = ci.iconFileID
+      cid = entry.id
+      label = entry.label or ci.name
+    end
+  end
+
+  -- Fallback to UI list name scanning
+  if not cid then
+    local q2, ic2, cid2 = FindInCurrencyListByName(entry.uiName)
+    qty = q2 or 0
+    iconID = ic2
+    cid = cid2
+    label = entry.label or entry.uiName
+  end
+
+  -- Read details for caps/weekly if we have a currencyID
+  local det = cid and ReadDetails(cid) or nil
 
   -- Compose text
-  local text = string.format("%s: %d", entry.label, qty or 0)
+  local text = string.format("%s: %d", label or (entry.label or "Currency"), qty or 0)
 
   -- Season cap (maxQuantity), if present
   if det and det.maxQuantity and det.maxQuantity > 0 then
@@ -114,7 +139,7 @@ function API.create(parent, cfg)
   f.title = f:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
   f.title:SetPoint("TOPLEFT", f, "TOPLEFT", PAD_X, -PAD_Y)
   f.title:SetTextColor(1, 1, 1, 1)
-  f.title:SetText((cfg.label or "Season 3 Currencies") .. ScopeTag())
+  f.title:SetText((cfg.label or "Seasonal Currencies") .. ScopeTag())
   UI.Outline(f.title)
 
   f._labels, f._icons = {}, {}
@@ -181,7 +206,7 @@ function API.update(frame, cfg)
     end
   end
   -- Title
-  frame.title:SetText(((cfg and cfg.label) or "Season 3 Currencies") .. ScopeTag())
+  frame.title:SetText(((cfg and cfg.label) or "Seasonal Currencies") .. ScopeTag())
 
   -- Rows
   for i, entry in ipairs(CURRENCIES) do

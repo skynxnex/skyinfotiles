@@ -9,7 +9,7 @@ _G.InfoTilesDB = nil -- clean up legacy global if it existed
 
 -- ===== Catalog: predefined tiles (add more over time) =====
 local CATALOG = {
-  { key = "season3",    type = "season3",    label = "Season 3 Currencies", defaultEnabled = true },
+  { key = "season3",    type = "season3",    label = "Seasonal Currencies", defaultEnabled = true },
   { key = "keystone",   type = "keystone",   label = "Mythic Keystone",     defaultEnabled = true },
   { key = "charstats",  type = "charstats",  label = "Character Stats",     defaultEnabled = true },
   { key = "crosshair",  type = "crosshair",  label = "Crosshair",           defaultEnabled = false },
@@ -18,6 +18,7 @@ local CATALOG = {
   { key = "petbox",     type = "petbox",     label = "Pet Box",             defaultEnabled = false },
   { key = "clock",      type = "clock",      label = "24h Clock",           defaultEnabled = false },
   { key = "dungeonports", type = "dungeonports", label = "Dungeon Teleports", defaultEnabled = false },
+  { key = "groupbuffs", type = "groupbuffs", label = "Group Buffs",         defaultEnabled = false },
 }
 SkyInfoTiles.CATALOG = CATALOG -- used by Options.lua
 
@@ -29,6 +30,7 @@ local DEFAULTS = {
   fontOutline = "OUTLINE",
   profile     = "Default",
   profiles    = { Default = { tiles = {} } },
+  enableSpecProfiles = false, -- master toggle to use per-spec profile mapping
   specProfiles = {}, -- map [specID] = "ProfileName"
 }
 
@@ -60,6 +62,39 @@ end
 
 -- convenient alias
 SkyInfoTiles.Outline = SkyInfoTiles.UI.Outline
+
+-- CVar helpers and global UI scale controls
+local function SafeSetCVar(name, value)
+  if C_CVar and C_CVar.SetCVar then pcall(C_CVar.SetCVar, name, tostring(value))
+  elseif SetCVar then pcall(SetCVar, name, tostring(value)) end
+end
+
+local function SafeGetCVar(name)
+  if C_CVar and C_CVar.GetCVar then return C_CVar.GetCVar(name)
+  elseif GetCVar then return GetCVar(name) end
+  return nil
+end
+
+local function SafeGetCVarBool(name)
+  if C_CVar and C_CVar.GetCVarBool then return C_CVar.GetCVarBool(name)
+  elseif GetCVarBool then return GetCVarBool(name) end
+  return false
+end
+
+SkyInfoTiles._pendingUiScale = SkyInfoTiles._pendingUiScale or nil
+SkyInfoTiles._pendingUseUiScale = SkyInfoTiles._pendingUseUiScale or nil
+
+function SkyInfoTiles.SetUseUiScale(on)
+  -- disabled (no-op)
+end
+
+function SkyInfoTiles.SetUiScale(scale)
+  -- disabled (no-op)
+end
+
+function SkyInfoTiles.ApplyUiScale(scale)
+  -- disabled (no-op)
+end
 
 -- ===== Utils =====
 local function deepcopy(v)
@@ -110,10 +145,13 @@ end
 function SkyInfoTiles.GetActiveProfileName()
   SkyInfoTilesDB = SkyInfoTilesDB or {}
   local base = SkyInfoTilesDB.profile or "Default"
-  local specId = GetActiveSpecID()
-  local map = SkyInfoTilesDB.specProfiles
-  if type(map) == "table" and specId and type(map[specId]) == "string" and map[specId] ~= "" then
-    return map[specId]
+  local enabledSpec = SkyInfoTilesDB.enableSpecProfiles and true or false
+  if enabledSpec then
+    local specId = GetActiveSpecID()
+    local map = SkyInfoTilesDB.specProfiles
+    if type(map) == "table" and specId and type(map[specId]) == "string" and map[specId] ~= "" then
+      return map[specId]
+    end
   end
   return base
 end
@@ -152,6 +190,69 @@ function SkyInfoTiles.GetOrCreateTileCfg(key)
     table.insert(tiles, cfg)
   end
   return cfg
+end
+
+-- ===== Profile-scoped tile accessors (for editing non-active profiles) =====
+function SkyInfoTiles.GetTilesForProfile(profileName)
+  local name = profileName or (SkyInfoTilesDB and SkyInfoTilesDB.profile) or "Default"
+  local prof = GetOrCreateProfile(name)
+  return prof.tiles
+end
+
+local function FindTileByKeyInTiles(tiles, key)
+  if type(tiles) ~= "table" then return nil, nil end
+  for i, cfg in ipairs(tiles) do
+    if cfg.key == key then return cfg, i end
+  end
+  return nil, nil
+end
+
+local function EnsureTileExistsForCatInTiles(tiles, cat)
+  local cfg = select(1, FindTileByKeyInTiles(tiles, cat.key))
+  if cfg then return cfg end
+  cfg = {
+    key = cat.key, type = cat.type, label = cat.label,
+    enabled = (cat.defaultEnabled ~= false),
+    point = "CENTER", x = 0, y = 0,
+  }
+  table.insert(tiles, cfg)
+  return cfg
+end
+
+function SkyInfoTiles.GetOrCreateTileCfgForProfile(profileName, key)
+  local tiles = SkyInfoTiles.GetTilesForProfile(profileName)
+  -- Avoid forward reference to a local defined later: scan catalog directly
+  local cat = nil
+  for _, c in ipairs(SkyInfoTiles.CATALOG or {}) do
+    if c.key == key then cat = c; break end
+  end
+  if not cat then return nil end
+  local cfg = select(1, FindTileByKeyInTiles(tiles, key))
+  if not cfg then
+    cfg = EnsureTileExistsForCatInTiles(tiles, cat)
+  end
+  return cfg
+end
+
+function SkyInfoTiles.GetTileEnabledByKeyForProfile(profileName, key)
+  local cfg = SkyInfoTiles.GetOrCreateTileCfgForProfile(profileName, key)
+  return (cfg and cfg.enabled ~= false) or false
+end
+
+function SkyInfoTiles.SetTileEnabledByKeyForProfile(profileName, key, enabled)
+  local cfg = SkyInfoTiles.GetOrCreateTileCfgForProfile(profileName, key)
+  if not cfg then return end
+  local base = profileName or (SkyInfoTilesDB and SkyInfoTilesDB.profile) or "Default"
+  cfg.enabled = not not enabled
+  if Print then Print(("Profile %s: [%s] enabled=%s"):format(tostring(base), tostring(key), tostring(cfg.enabled))) end
+  local active = SkyInfoTiles.GetActiveProfileName()
+  if active == base then
+    SkyInfoTiles.Rebuild()
+    SkyInfoTiles.UpdateAll()
+    if SkyInfoTiles._OptionsRefresh then SkyInfoTiles._OptionsRefresh() end
+  end
+  -- If editing a non-active profile, do not refresh/rebuild the options panel immediately;
+  -- this prevents the checkbox from being reset by a mid-click refresh.
 end
 
 -- ===== DB helpers (by key) =====
@@ -416,8 +517,8 @@ SlashCmdList["SKYINFOTILES"] = function(msg)
   msg = Trim(msg or "")
   local cmd, rest = msg:match("^(%S+)%s*(.*)$")
   if not cmd or cmd == "" then
-    Print("Commands: lock, unlock, enable <key>, disable <key>, list, reset, clean, options, scope <char|warband>, outline <none|outline|thick>, layout <key> <horizontal|vertical>")
-    Print("Keys: season3, keystone, charstats, crosshair, healthbox, targetbox, petbox, clock, dungeonports")
+    Print("Commands: lock, unlock, enable <key>, disable <key>, list, reset, clean, options, scope <char|warband>, outline <none|outline|thick>, layout <key> <horizontal|vertical>, preview <key> <on|off>, scale <key> <0.5-2.0>")
+    Print("Keys: season3, keystone, charstats, crosshair, healthbox, targetbox, petbox, clock, dungeonports, groupbuffs")
     return
   end
   cmd = cmd:lower()
@@ -487,6 +588,42 @@ SlashCmdList["SKYINFOTILES"] = function(msg)
     cfg.orientation = orient
     SkyInfoTiles.Rebuild(); SkyInfoTiles.UpdateAll()
     Print(string.format("Layout for [%s] set to %s.", key, orient))
+    return
+  end
+
+  if cmd == "preview" then
+    local key, state = rest:match("^(%S+)%s+(%S+)$")
+    if not key or not state then Print("Usage: /skytiles preview <key> <on|off>"); return end
+    state = state:lower()
+    if state ~= "on" and state ~= "off" and state ~= "true" and state ~= "false" then
+      Print("Usage: /skytiles preview <key> <on|off>"); return
+    end
+    local cat = FindCatByKey(key)
+    if not cat then Print("Unknown key: " .. tostring(key)); return end
+    local cfg = FindTileByKey(key) or EnsureTileExistsForCat(cat)
+    cfg.preview = (state == "on" or state == "true")
+    SkyInfoTiles.Rebuild(); SkyInfoTiles.UpdateAll()
+    Print(string.format("Preview for [%s] set to %s.", key, cfg.preview and "ON" or "OFF"))
+    return
+  end
+
+  if cmd == "scale" then
+    local key, sval = rest:match("^(%S+)%s+(%S+)$")
+    if not key or not sval then Print("Usage: /skytiles scale <key> <0.5-2.0>"); return end
+    local v = tonumber(sval)
+    if not v then Print("Usage: /skytiles scale <key> <0.5-2.0>"); return end
+    if v < 0.5 then v = 0.5 elseif v > 2.0 then v = 2.0 end
+    local cat = FindCatByKey(key)
+    if not cat then Print("Unknown key: " .. tostring(key)); return end
+    local cfg = FindTileByKey(key) or EnsureTileExistsForCat(cat)
+    cfg.scale = v
+    SkyInfoTiles.Rebuild(); SkyInfoTiles.UpdateAll()
+    Print(string.format("Scale for [%s] set to %.2f.", key, v))
+    return
+  end
+
+  if cmd == "uiscale" then
+    Print("UI scale control is disabled.")
     return
   end
 
@@ -651,6 +788,18 @@ ev:SetScript("OnEvent", function(self, event, ...)
 
     local a, r = MigrateLegacy()
     SeedCatalog()
+    -- One-time migration for 1.6.0: disable specific tiles across all profiles
+    if not SkyInfoTilesDB._migrated_160_disableSomeTiles then
+      local toDisable = { healthbox = true, petbox = true, targetbox = true, groupbuffs = true }
+      SkyInfoTilesDB.profiles = SkyInfoTilesDB.profiles or { Default = { tiles = {} } }
+      for profileName, _ in pairs(SkyInfoTilesDB.profiles) do
+        for key, _ in pairs(toDisable) do
+          local cfg = SkyInfoTiles.GetOrCreateTileCfgForProfile and SkyInfoTiles.GetOrCreateTileCfgForProfile(profileName, key)
+          if cfg then cfg.enabled = false end
+        end
+      end
+      SkyInfoTilesDB._migrated_160_disableSomeTiles = true
+    end
     SkyInfoTiles.Rebuild()
     SkyInfoTiles.UpdateAll()
     if SkyInfoTiles._OptionsRefresh then SkyInfoTiles._OptionsRefresh() end

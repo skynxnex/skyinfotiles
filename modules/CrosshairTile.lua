@@ -33,6 +33,8 @@ function API.create(parent, cfg)
   local size = (cfg and cfg.size) or DEFAULT_SIZE
   local box = Clamp(size + 16, 32, 528)
   f:SetSize(box, box)
+  -- Crosshair should never be draggable
+  f._noDrag = true
 
   local size0, thick0, r0, g0, b0, a0 = ReadCfg(cfg)
 
@@ -101,28 +103,22 @@ function API.update(frame, cfg)
     end
   end
 
-  -- Expand frame hitbox slightly around lines for easier dragging
+  -- Expand frame hitbox slightly around lines for hover/right-click; not draggable
   local box = Clamp(size + 16, 32, 528)
   if frame.SetSize then frame:SetSize(box, box) end
 
-  -- Draggable base frame when unlocked (same pattern as other tiles)
-  local locked = (SkyInfoTilesDB and SkyInfoTilesDB.locked) and true or false
-  if frame.EnableMouse and frame.SetMovable then
-    frame:EnableMouse(not locked)
-    frame:SetMovable(not locked)
-    if not locked and frame.RegisterForDrag then
-      frame:RegisterForDrag("LeftButton")
-      frame:SetScript("OnDragStart", frame.StartMoving)
-      frame:SetScript("OnDragStop", function(self)
-        self:StopMovingOrSizing()
-        local point, _, _, X, Y = self:GetPoint()
-        if self._cfg then self._cfg.point, self._cfg.x, self._cfg.y = point, X, Y end
-      end)
-    elseif frame.RegisterForDrag then
-      frame:RegisterForDrag()
-      frame:SetScript("OnDragStart", nil)
-      frame:SetScript("OnDragStop", nil)
-    end
+  -- Always immovable (ignore Locked toggle)
+  if frame.EnableMouse then frame:EnableMouse(true) end -- keep right-click refresh
+  if frame.SetMovable then frame:SetMovable(false) end
+  if frame.RegisterForDrag then
+    frame:RegisterForDrag()
+    frame:SetScript("OnDragStart", nil)
+    frame:SetScript("OnDragStop", nil)
+  end
+  -- Force centered position defensively
+  if frame.ClearAllPoints and frame.SetPoint then
+    frame:ClearAllPoints()
+    frame:SetPoint("CENTER", UIParent, "CENTER", 0, 0)
   end
 end
 
