@@ -56,7 +56,7 @@ Small, lightweight info tiles you can place anywhere on your screen. Each tile i
 - 24h Clock
   - Size, font, outline, and color
 
-Note: Health Box, Target Box, Pet Box, and Group Buffs settings are temporarily hidden while these tiles are being revised for 12.0.
+Note: Health Box, Target Box, Pet Box, and Group Buffs tiles have been removed.
 
 ## Scope
 

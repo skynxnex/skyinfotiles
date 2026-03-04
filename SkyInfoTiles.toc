@@ -13,8 +13,4 @@ modules\KeystoneTile.lua
 modules\CharStatsTile.lua
 modules\DungeonPortsTile.lua
 modules\CrosshairTile.lua
-modules\HealthBoxTile.lua
-modules\TargetBoxTile.lua
-modules\PetBoxTile.lua
-modules\GroupBuffsTile.lua
 modules\ClockTile.lua

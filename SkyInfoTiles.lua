@@ -9,16 +9,12 @@ _G.InfoTilesDB = nil -- clean up legacy global if it existed
 
 -- ===== Catalog: predefined tiles (add more over time) =====
 local CATALOG = {
-  { key = "season3",    type = "season3",    label = "Seasonal Currencies", defaultEnabled = true },
+  { key = "season3",    type = "season3",    label = "Season 1 Currencies", defaultEnabled = true },
   { key = "keystone",   type = "keystone",   label = "Mythic Keystone",     defaultEnabled = true },
   { key = "charstats",  type = "charstats",  label = "Character Stats",     defaultEnabled = true },
   { key = "crosshair",  type = "crosshair",  label = "Crosshair",           defaultEnabled = false },
-  { key = "healthbox",  type = "healthbox",  label = "Health Box",          defaultEnabled = false },
-  { key = "targetbox",  type = "targetbox",  label = "Target Box",          defaultEnabled = false },
-  { key = "petbox",     type = "petbox",     label = "Pet Box",             defaultEnabled = false },
   { key = "clock",      type = "clock",      label = "24h Clock",           defaultEnabled = false },
   { key = "dungeonports", type = "dungeonports", label = "Dungeon Teleports", defaultEnabled = false },
-  { key = "groupbuffs", type = "groupbuffs", label = "Group Buffs",         defaultEnabled = false },
 }
 SkyInfoTiles.CATALOG = CATALOG -- used by Options.lua
 
@@ -518,7 +514,7 @@ SlashCmdList["SKYINFOTILES"] = function(msg)
   local cmd, rest = msg:match("^(%S+)%s*(.*)$")
   if not cmd or cmd == "" then
     Print("Commands: lock, unlock, enable <key>, disable <key>, list, reset, clean, options, scope <char|warband>, outline <none|outline|thick>, layout <key> <horizontal|vertical>, preview <key> <on|off>, scale <key> <0.5-2.0>")
-    Print("Keys: season3, keystone, charstats, crosshair, healthbox, targetbox, petbox, clock, dungeonports, groupbuffs")
+    Print("Keys: season3, keystone, charstats, crosshair, clock, dungeonports")
     return
   end
   cmd = cmd:lower()
@@ -554,6 +550,8 @@ SlashCmdList["SKYINFOTILES"] = function(msg)
     if SkyInfoTiles.OpenOptions then SkyInfoTiles.OpenOptions() else Print("Open Interface -> AddOns -> SkyInfoTiles.") end
     return
   end
+
+
 
   if cmd == "scope" then
     local v = (rest or ""):lower()
@@ -788,17 +786,42 @@ ev:SetScript("OnEvent", function(self, event, ...)
 
     local a, r = MigrateLegacy()
     SeedCatalog()
-    -- One-time migration for 1.6.0: disable specific tiles across all profiles
-    if not SkyInfoTilesDB._migrated_160_disableSomeTiles then
-      local toDisable = { healthbox = true, petbox = true, targetbox = true, groupbuffs = true }
-      SkyInfoTilesDB.profiles = SkyInfoTilesDB.profiles or { Default = { tiles = {} } }
-      for profileName, _ in pairs(SkyInfoTilesDB.profiles) do
-        for key, _ in pairs(toDisable) do
-          local cfg = SkyInfoTiles.GetOrCreateTileCfgForProfile and SkyInfoTiles.GetOrCreateTileCfgForProfile(profileName, key)
-          if cfg then cfg.enabled = false end
+    -- Remove deprecated tiles from all profiles (1.7.1 cleanup)
+    if not SkyInfoTilesDB._migrated_171_removeDeprecatedTiles then
+      local remove = { healthbox = true, petbox = true, targetbox = true, groupbuffs = true }
+      if type(SkyInfoTilesDB.profiles) == "table" then
+        for _, prof in pairs(SkyInfoTilesDB.profiles) do
+          if type(prof) == "table" and type(prof.tiles) == "table" then
+            for i = #prof.tiles, 1, -1 do
+              local k = prof.tiles[i] and prof.tiles[i].key
+              if k and remove[k] then
+                table.remove(prof.tiles, i)
+              end
+            end
+          end
         end
       end
-      SkyInfoTilesDB._migrated_160_disableSomeTiles = true
+      SkyInfoTilesDB._migrated_171_removeDeprecatedTiles = true
+    end
+
+    -- Update label for seasonal currency tile in all profiles (avoid showing old season labels)
+    do
+      local seasonLabel = nil
+      for _, cat in ipairs(CATALOG) do
+        if cat.key == "season3" then seasonLabel = cat.label; break end
+      end
+      if seasonLabel and type(SkyInfoTilesDB.profiles) == "table" then
+        for _, prof in pairs(SkyInfoTilesDB.profiles) do
+          if type(prof) == "table" and type(prof.tiles) == "table" then
+            for _, t in ipairs(prof.tiles) do
+              if t and t.key == "season3" then
+                -- Always force label to current catalog label (covers old saved labels like "Season 3 Currencies")
+                t.label = seasonLabel
+              end
+            end
+          end
+        end
+      end
     end
     SkyInfoTiles.Rebuild()
     SkyInfoTiles.UpdateAll()
