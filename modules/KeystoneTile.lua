@@ -519,9 +519,27 @@ function API.create(parent, cfg)
   f:RegisterEvent("CHALLENGE_MODE_COMPLETED")
   f:RegisterEvent("SPELLS_CHANGED")        -- rebuild cache on changes
   f:RegisterEvent("PLAYER_REGEN_ENABLED")  -- apply deferred secure attrs / creation
+
+  -- Throttle cache rebuild (SPELLS_CHANGED can spam during addon loads)
+  f._cacheRebuildPending = false
+  local function ScheduleCacheRebuild()
+    if f._cacheRebuildPending then return end
+    f._cacheRebuildPending = true
+    if C_Timer and C_Timer.After then
+      C_Timer.After(1, function()
+        f._cacheRebuildPending = false
+        teleportCache = nil
+      end)
+    else
+      -- Fallback: clear immediately if no timer API
+      teleportCache = nil
+      f._cacheRebuildPending = false
+    end
+  end
+
   f:SetScript("OnEvent", function(self, event)
     if event == "SPELLS_CHANGED" then
-      teleportCache = nil
+      ScheduleCacheRebuild()
     elseif event == "PLAYER_REGEN_ENABLED" then
       if f._pendingCastCreate and not (InCombatLockdown and InCombatLockdown()) then
         f._pendingCastCreate = nil

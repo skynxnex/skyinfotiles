@@ -72,7 +72,14 @@ function API.create(parent, cfg)
   f:SetScript("OnShow", function(self) API.update(self, cfg) end)
   API.update(f, cfg)
 
-  function f:Destroy() end
+  function f:Destroy()
+    if self.SetScript then
+      self:SetScript("OnMouseUp", nil)
+      self:SetScript("OnShow", nil)
+      self:SetScript("OnDragStart", nil)
+      self:SetScript("OnDragStop", nil)
+    end
+  end
   return f
 end
 

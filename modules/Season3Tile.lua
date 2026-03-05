@@ -177,15 +177,6 @@ function API.create(parent, cfg)
     if btn == "RightButton" then API.update(self, cfg) end
   end)
 
-  -- Drag hint (shown only when unlocked)
-  f.hint = f:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-  f.hint:SetPoint("BOTTOMRIGHT", f, "BOTTOMRIGHT", -4, 4)
-  f.hint:SetTextColor(1, 1, 1, 0.8)
-  f.hint:SetShadowColor(0, 0, 0, 1)
-  f.hint:SetShadowOffset(1, -1)
-  f.hint:SetText("drag")
-  f.hint:Hide()
-
   -- Events for level gating
   f:RegisterEvent("PLAYER_ENTERING_WORLD")
   f:RegisterEvent("PLAYER_LEVEL_UP")
@@ -196,7 +187,16 @@ function API.create(parent, cfg)
   -- First paint when shown
   f:SetScript("OnShow", function(self) API.update(self, cfg) end)
 
-  function f:Destroy() end
+  function f:Destroy()
+    if self.UnregisterAllEvents then
+      self:UnregisterAllEvents()
+    end
+    if self.SetScript then
+      self:SetScript("OnEvent", nil)
+      self:SetScript("OnShow", nil)
+      self:SetScript("OnMouseUp", nil)
+    end
+  end
   return f
 end
 
@@ -227,9 +227,6 @@ function API.update(frame, cfg)
     if frame._labels[i] then frame._labels[i]:SetText(text or entry.label or "?") end
     if frame._icons[i] and iconID then frame._icons[i]:SetTexture(iconID) end
   end
-
-  -- Drag hint visibility
-  if SkyInfoTilesDB and not SkyInfoTilesDB.locked then frame.hint:Show() else frame.hint:Hide() end
 end
 
 SkyInfoTiles.RegisterTileType("season3", API)

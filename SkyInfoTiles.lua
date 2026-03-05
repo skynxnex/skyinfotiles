@@ -382,21 +382,58 @@ end
 
 local function SetMovable(f)
   if f and f._noDrag then
-    if f.EnableMouse then f:EnableMouse(false) end
-    if f.SetMovable then f:SetMovable(false) end
-    if f.RegisterForDrag then f:RegisterForDrag() end
+    if f.EnableMouse then pcall(f.EnableMouse, f, false) end
+    if f.SetMovable then pcall(f.SetMovable, f, false) end
+    if f.RegisterForDrag then pcall(f.RegisterForDrag, f) end
     if f.SetScript then
-      f:SetScript("OnDragStart", nil)
-      f:SetScript("OnDragStop", nil)
+      pcall(f.SetScript, f, "OnDragStart", nil)
+      pcall(f.SetScript, f, "OnDragStop", nil)
+    end
+    -- Hide unlock indicator for non-draggable frames
+    if f._unlockIndicator then
+      f._unlockIndicator:Hide()
     end
     return
   end
   local unlocked = not SkyInfoTilesDB.locked
+
+  -- Visual feedback: show backdrop when unlocked
+  if unlocked then
+    if not f._unlockIndicator then
+      -- Create backdrop frame
+      f._unlockIndicator = CreateFrame("Frame", nil, f, BackdropTemplateMixin and "BackdropTemplate" or nil)
+      f._unlockIndicator:SetAllPoints(f)
+      f._unlockIndicator:SetFrameLevel(f:GetFrameLevel() - 1)
+
+      -- Backdrop with semi-transparent background and green border
+      local backdropInfo = {
+        bgFile = "Interface\\Tooltips\\UI-Tooltip-Background",
+        edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
+        tile = true,
+        tileSize = 16,
+        edgeSize = 16,
+        insets = { left = 4, right = 4, top = 4, bottom = 4 },
+      }
+
+      if f._unlockIndicator.SetBackdrop then
+        f._unlockIndicator:SetBackdrop(backdropInfo)
+        f._unlockIndicator:SetBackdropColor(0, 1, 0, 0.1)  -- Green tint, very transparent
+        f._unlockIndicator:SetBackdropBorderColor(0, 1, 0, 0.6)  -- Green border, semi-transparent
+      end
+    end
+    f._unlockIndicator:Show()
+  else
+    -- Hide backdrop when locked
+    if f._unlockIndicator then
+      f._unlockIndicator:Hide()
+    end
+  end
+
   if not (InCombatLockdown and InCombatLockdown()) then
-    if f.EnableMouse then f:EnableMouse(unlocked) end
-    if f.SetMovable then f:SetMovable(unlocked) end
+    if f.EnableMouse then pcall(f.EnableMouse, f, unlocked) end
+    if f.SetMovable then pcall(f.SetMovable, f, unlocked) end
     if unlocked and f.RegisterForDrag then
-      f:RegisterForDrag("LeftButton")
+      pcall(f.RegisterForDrag, f, "LeftButton")
       f:SetScript("OnDragStart", function(self)
         if self.StartMoving then self:StartMoving() end
       end)
@@ -405,20 +442,20 @@ local function SetMovable(f)
         local point, _, _, x, y = self:GetPoint()
         if self._cfg then self._cfg.point, self._cfg.x, self._cfg.y = point, x, y end
       end
-      f:SetScript("OnDragStop", StopDragging)
+      pcall(f.SetScript, f, "OnDragStop", StopDragging)
       if f.SetScript then
-        f:SetScript("OnMouseUp", StopDragging)
-        f:SetScript("OnHide", function(self)
+        pcall(f.SetScript, f, "OnMouseUp", StopDragging)
+        pcall(f.SetScript, f, "OnHide", function(self)
           if self.StopMovingOrSizing then self:StopMovingOrSizing() end
         end)
       end
     elseif f.RegisterForDrag then
-      f:RegisterForDrag()
-      f:SetScript("OnDragStart", nil)
-      f:SetScript("OnDragStop", nil)
+      pcall(f.RegisterForDrag, f)
       if f.SetScript then
-        f:SetScript("OnMouseUp", nil)
-        f:SetScript("OnHide", nil)
+        pcall(f.SetScript, f, "OnDragStart", nil)
+        pcall(f.SetScript, f, "OnDragStop", nil)
+        pcall(f.SetScript, f, "OnMouseUp", nil)
+        pcall(f.SetScript, f, "OnHide", nil)
       end
     end
   end
@@ -431,7 +468,7 @@ function SkyInfoTiles.Rebuild()
   end
   for i, f in ipairs(tilesFrames) do
     if f and f.Destroy then pcall(f.Destroy, f) end
-    if f and f.Hide and not InLockdown() then f:Hide() end
+    if f and f.Hide and not InLockdown() then pcall(f.Hide, f) end
     tilesFrames[i] = nil
   end
   tilesFrames = {}

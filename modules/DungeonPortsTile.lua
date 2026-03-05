@@ -953,6 +953,32 @@ function API.create(parent, cfg)
   f:RegisterEvent("SPELL_UPDATE_COOLDOWN")
   f:RegisterEvent("PLAYER_REGEN_ENABLED")
   f:RegisterEvent("UNIT_SPELLCAST_SUCCEEDED")
+
+  -- Throttle update calls (SPELL_UPDATE_COOLDOWN can spam)
+  f._updateThrottle = 0
+  local function ThrottledUpdate()
+    local now = GetTime and GetTime() or 0
+    if (now - f._updateThrottle) < 0.1 then return end  -- Max 10 updates/sec
+    f._updateThrottle = now
+    API.update(f, cfg)
+  end
+
+  -- Throttle cache rebuild
+  f._cacheRebuildPending = false
+  local function ScheduleCacheRebuild()
+    if f._cacheRebuildPending then return end
+    f._cacheRebuildPending = true
+    if C_Timer and C_Timer.After then
+      C_Timer.After(1, function()
+        f._cacheRebuildPending = false
+        teleportCache = nil
+      end)
+    else
+      teleportCache = nil
+      f._cacheRebuildPending = false
+    end
+  end
+
   f:SetScript("OnEvent", function(self, event)
     if event == "PLAYER_REGEN_ENABLED" then
       if self._pendingRebuild then
@@ -1000,10 +1026,19 @@ function API.create(parent, cfg)
       end
     elseif event == "CHALLENGE_MODE_MAPS_UPDATE" then
       RebuildCells(self, cfg)
+      API.update(self, cfg)  -- Important: rebuild means immediate update
+      return
     elseif event == "SPELLS_CHANGED" then
-      teleportCache = nil
+      ScheduleCacheRebuild()
     end
-    API.update(self, cfg)
+
+    -- Throttle updates for spammy events (SPELL_UPDATE_COOLDOWN, UNIT_SPELLCAST_SUCCEEDED)
+    if event == "SPELL_UPDATE_COOLDOWN" or event == "UNIT_SPELLCAST_SUCCEEDED" then
+      ThrottledUpdate()
+    else
+      -- Important events: update immediately
+      API.update(self, cfg)
+    end
   end)
 
   -- Right-click refresh; drag handling in update() based on locked state (like Keystone tile)
