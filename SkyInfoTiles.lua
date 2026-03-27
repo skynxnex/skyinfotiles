@@ -821,8 +821,6 @@ ev:SetScript("OnEvent", function(self, event, ...)
       SkyInfoTilesDB.tiles = {} -- clear legacy container
     end
 
-    local a, r = MigrateLegacy()
-    SeedCatalog()
     -- Remove deprecated tiles from all profiles (1.7.1 cleanup)
     if not SkyInfoTilesDB._migrated_171_removeDeprecatedTiles then
       local remove = { healthbox = true, petbox = true, targetbox = true, groupbuffs = true }
@@ -842,6 +840,7 @@ ev:SetScript("OnEvent", function(self, event, ...)
     end
 
     -- Migrate legacy "season3" tile to "currencies" (1.8.2+)
+    -- IMPORTANT: Must run BEFORE MigrateLegacy() to avoid creating duplicates
     if not SkyInfoTilesDB._migrated_182_season3ToCurrencies then
       if type(SkyInfoTilesDB.profiles) == "table" then
         for _, prof in pairs(SkyInfoTilesDB.profiles) do
@@ -858,6 +857,9 @@ ev:SetScript("OnEvent", function(self, event, ...)
       end
       SkyInfoTilesDB._migrated_182_season3ToCurrencies = true
     end
+
+    local a, r = MigrateLegacy()
+    SeedCatalog()
     SkyInfoTiles.Rebuild()
     SkyInfoTiles.UpdateAll()
     if SkyInfoTiles._OptionsRefresh then SkyInfoTiles._OptionsRefresh() end
