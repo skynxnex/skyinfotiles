@@ -2,7 +2,13 @@
 
 **Lightweight, modular info tiles for World of Warcraft**
 
+[![CurseForge](https://img.shields.io/badge/CurseForge-Download-orange)](https://www.curseforge.com/wow/addons/skyinfotiles)
+
 Small, draggable info tiles that display key game information at a glance. Each tile is focused, readable, and performance-friendly—no bulky UI, just the data you need.
+
+## Download
+
+**[Download on CurseForge](https://www.curseforge.com/wow/addons/skyinfotiles)**
 
 ## Features
 
@@ -40,7 +46,7 @@ Small, draggable info tiles that display key game information at a glance. Each 
 
 ## Installation
 
-1. Download the latest release
+1. **Download** from [CurseForge](https://www.curseforge.com/wow/addons/skyinfotiles)
 2. Extract to `World of Warcraft\_retail_\Interface\AddOns\`
 3. Restart WoW or `/reload`
 4. Configure via **Interface → AddOns → SkyInfoTiles**
@@ -139,11 +145,15 @@ Make sure you're not in combat when changing settings. Some operations are defer
 
 See [CLAUDE.md](CLAUDE.md) for development guidelines, architecture details, and contribution instructions.
 
+## Links
+
+- **[CurseForge Page](https://www.curseforge.com/wow/addons/skyinfotiles)** - Download and updates
+- **[GitHub Repository](https://github.com/yourusername/SkyInfoTiles)** - Source code and issues
+
 ## License
 
 MIT License - See LICENSE file for details
 
 ---
 
-**Support:** Report issues on GitHub
 **Version:** 1.8.2
