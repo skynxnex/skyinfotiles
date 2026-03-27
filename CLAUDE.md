@@ -53,7 +53,7 @@ SkyInfoTiles.RegisterTileType("tiletype", API)
 
 ### Current Tiles
 
-- **Season3Tile** (`season3`): Season currencies display with ID-based lookups
+- **CurrencyTile** (`currencies`): Current season currencies display with ID-based lookups
 - **KeystoneTile** (`keystone`): M+ keystone display with teleport integration
 - **CharStatsTile** (`charstats`): Item level and character stats with reorderable lines
 - **DungeonPortsTile** (`dungeonports`): Dungeon teleport icons with cooldown tracking
@@ -204,7 +204,7 @@ end
 ## Known Issues & Quirks
 
 - **InterfaceOptionsFrame_OpenToCategory**: Must be called twice on classic API due to Blizzard bug (already handled in Options.lua)
-- **Currency Discovery**: Some currencies don't appear in `C_CurrencyInfo.GetCurrencyInfo()` until discovered; Season3Tile shows 0 for undiscovered IDs
+- **Currency Discovery**: Some currencies don't appear in `C_CurrencyInfo.GetCurrencyInfo()` until discovered; CurrencyTile shows 0 for undiscovered IDs
 - **Keystone Teleport Mapping**: DungeonPortsTile uses preset maps + learned spell detection; mismatches may occur with renamed dungeons
 - **Crosshair Positioning**: Crosshair tile always anchored to CENTER (0,0) and cannot be dragged
 
@@ -217,7 +217,7 @@ SkyInfoTiles/
 ├── DESCRIPTION.md           # User-facing documentation
 └── modules/
     ├── Options.lua          # Settings panel (dual API support)
-    ├── Season3Tile.lua      # Currency display
+    ├── CurrencyTile.lua     # Current season currency display
     ├── KeystoneTile.lua     # M+ keystone tracker
     ├── CharStatsTile.lua    # Character stats
     ├── DungeonPortsTile.lua # Dungeon teleport buttons
@@ -229,6 +229,7 @@ SkyInfoTiles/
 
 - **1.7.0**: Introduced profiles system, migrated legacy `SkyInfoTilesDB.tiles` → `profiles.Default.tiles`
 - **1.7.1**: Removed deprecated tiles (healthbox, petbox, targetbox, groupbuffs) with automatic cleanup
-- Migration flags: `_migrated_171_removeDeprecatedTiles`, `_helloShown`
+- **1.8.2**: Renamed "season3" tile to "currencies" for season-agnostic naming
+- Migration flags: `_migrated_171_removeDeprecatedTiles`, `_migrated_182_season3ToCurrencies`, `_helloShown`
 
 Always run migrations in `PLAYER_LOGIN` event handler before `Rebuild()`.

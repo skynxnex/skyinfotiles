@@ -2,110 +2,310 @@ local ADDON_NAME = ...
 local SkyInfoTiles = _G[ADDON_NAME]
 local UI = SkyInfoTiles.UI
 
--- Simple dark backdrop
-local BACKDROP = {
-  bgFile   = "Interface\\Buttons\\WHITE8x8",
-  edgeFile = "Interface\\Buttons\\WHITE8x8",
-  edgeSize = 1,
-  insets   = { left = 0, right = 0, top = 0, bottom = 0 },
+-- Current season currencies
+-- Hardcoded list of active season currencies (by ID). Update this list each season.
+local CURRENCIES = {
+  -- Primary currency
+  { id = 2803, label = "Undercoin" },
+
+  -- Coffer system
+  { id = 3310, label = "Coffer Key Shards" },
+  { id = 3028, label = "Restored Coffer Key" },
+  { id = 3378, label = "Dawnlight Manaflux" },
+  { id = 3376, label = "Shard of Dundun" },
+
+  -- Upgrade materials
+  { id = 3212, label = "Radiant Spark Dust" },
+
+  -- Core Midnight currencies
+  { id = 3316, label = "Voidlight Marl" },
+
+  -- Separator
+  { separator = true },
+
+  -- Dawncrest PvP/Rating currencies (lowest to highest)
+  { id = 3347, label = "Myth Dawncrest" },
+  { id = 3345, label = "Hero Dawncrest" },
+  { id = 3343, label = "Champion Dawncrest" },
+  { id = 3341, label = "Veteran Dawncrest" },
+  { id = 3383, label = "Adventurer Dawncrest" },
 }
 
-local function colorTex(tex, r, g, b, a) tex:SetColorTexture(r, g, b, a or 1) end
+local function GetActiveCurrencyEntries() return CURRENCIES end
 
--- Format a single currency line
-local function fmtCurrencyLine(info, overrideLabel)
-  if not info then return (overrideLabel and (overrideLabel .. ": N/A")) or "N/A" end
-
-  local name = overrideLabel or info.name or ("ID " .. (info.currencyTypesID or "?"))
-  local qty  = tonumber(info.quantity) or 0
-
-  local parts = { string.format("%s: %d", name, qty) }
-
-  -- Hard cap
-  if info.maxQuantity and info.maxQuantity > 0 then
-    table.insert(parts, string.format("/ %d max", info.maxQuantity))
-  end
-
-  -- Weekly progress (prefer quantityEarnedThisWeek if available)
-  if info.canEarnPerWeek and info.maxWeeklyQuantity and info.maxWeeklyQuantity > 0 then
-    local earned = tonumber(info.quantityEarnedThisWeek) or 0
-    table.insert(parts, string.format(" | Weekly: %d/%d", earned, info.maxWeeklyQuantity))
-  end
-
-  return table.concat(parts, " ")
+local function SafeReleaseRegion(r)
+  if not r then return end
+  if r.Hide then pcall(r.Hide, r) end
+  if r.SetParent then pcall(r.SetParent, r, nil) end
 end
 
--- Merge warband vs character per global scope
-local function getScopedCurrencyInfo(id)
-  local char = C_CurrencyInfo.GetCurrencyInfo and C_CurrencyInfo.GetCurrencyInfo(id)
-  local wb   = C_CurrencyInfo.GetWarbandCurrencyInfo and C_CurrencyInfo.GetWarbandCurrencyInfo(id)
-  local scope = (SkyInfoTilesDB and SkyInfoTilesDB.scope) or "char"
+-- Layout
+local ROW_HEIGHT = 22
+local ICON_SIZE  = 18
+local PAD_X      = 8
+local PAD_Y      = 6
+local FONT       = "GameFontNormal"
 
-  local src = (scope == "warband" and wb) or char or wb
-  if not src then return nil end
+-- Max level gate
+local function IsAtMaxLevel()
+  local cur = (UnitLevel and UnitLevel("player")) or nil
+  local mx = (GetMaxLevelForPlayerExpansion and GetMaxLevelForPlayerExpansion()) or (MAX_PLAYER_LEVEL) or nil
+  if cur and mx then return cur >= mx end
+  return true
+end
 
-  -- Normalize to fields used by fmtCurrencyLine
+-- Read additional details (caps, total earned) by currencyID.
+local function ReadDetails(currencyID)
+  if not currencyID then return nil end
+  local ci = C_CurrencyInfo.GetCurrencyInfo and C_CurrencyInfo.GetCurrencyInfo(currencyID)
+  if not ci then return nil end
   return {
-    name                   = src.name,
-    quantity               = src.quantity,
-    maxQuantity            = src.maxQuantity,
-    canEarnPerWeek         = src.canEarnPerWeek,
-    maxWeeklyQuantity      = src.maxWeeklyQuantity,
-    quantityEarnedThisWeek = src.quantityEarnedThisWeek, -- preferred weekly source
-    currencyTypesID        = id,
+    name                   = ci.name,
+    quantity               = ci.quantity,
+    maxQuantity            = ci.maxQuantity,
+    totalEarned            = ci.totalEarned,
+    canEarnPerWeek         = ci.canEarnPerWeek,
+    maxWeeklyQuantity      = ci.maxWeeklyQuantity,
+    quantityEarnedThisWeek = ci.quantityEarnedThisWeek,
+    iconFileID             = ci.iconFileID,
+    currencyTypesID        = currencyID,
   }
+end
+
+local function BuildLine(entry, cfg)
+  -- Handle separator lines
+  if entry.separator then
+    return nil, nil, true  -- return nil text, nil icon, isSeparator=true
+  end
+
+  local qty, iconID, cid, label
+
+  -- Prefer ID-based read when provided (more robust across seasons/locales)
+  if entry.id and C_CurrencyInfo and C_CurrencyInfo.GetCurrencyInfo then
+    local ci = C_CurrencyInfo.GetCurrencyInfo(entry.id)
+    if ci then
+      qty = ci.quantity or 0
+      iconID = ci.iconFileID
+      cid = entry.id
+      label = entry.label or ci.name
+    end
+  end
+
+  -- If we have an ID but GetCurrencyInfo() returned nil (not discovered / not in list yet), still show the row.
+  if entry.id and not cid then
+    cid = entry.id
+    qty = 0
+    label = entry.label or ("ID " .. tostring(entry.id))
+  end
+
+  -- No name-based fallback: this tile is current-season only and should be ID-driven.
+  if not cid then
+    return (entry.label or "Currency") .. ": 0", nil, false
+  end
+
+  -- Read details for caps/weekly if we have a currencyID
+  local det = cid and ReadDetails(cid) or nil
+
+  -- Compose text: XX [YY/ZZ] format
+  -- [YY/ZZ] shows either season cap (maxQuantity) or weekly cap (maxWeeklyQuantity)
+  local text
+  if cfg and cfg.hideLabel then
+    -- Just show quantity (and progress if available)
+    text = string.format("%d", qty or 0)
+  else
+    -- Full text with label: "Name: XX"
+    text = string.format("%s: %d", label or (entry.label or "Currency"), qty or 0)
+  end
+
+  -- Show progress bracket [earned/cap]
+  -- Priority: season cap > weekly cap
+  -- Color red if capped
+  if det and det.maxQuantity and det.maxQuantity > 0 then
+    -- Has season cap - show totalEarned/maxQuantity
+    local progress = (det.totalEarned and det.totalEarned > 0) and det.totalEarned or (det.quantity or qty or 0)
+    local isCapped = progress >= det.maxQuantity
+    local color = isCapped and "|cffff0000" or ""
+    local reset = isCapped and "|r" or ""
+    text = text .. string.format(" %s[%d/%d]%s", color, progress, det.maxQuantity, reset)
+  elseif det and det.maxWeeklyQuantity and det.maxWeeklyQuantity > 0 then
+    -- No season cap but has weekly cap - show quantityEarnedThisWeek/maxWeeklyQuantity
+    local earned = det.quantityEarnedThisWeek or 0
+    local isCapped = earned >= det.maxWeeklyQuantity
+    local color = isCapped and "|cffff0000" or ""
+    local reset = isCapped and "|r" or ""
+    text = text .. string.format(" %s[%d/%d]%s", color, earned, det.maxWeeklyQuantity, reset)
+  end
+
+  -- Prefer detailed icon if list icon missing
+  if (not iconID) and det and det.iconFileID then
+    iconID = det.iconFileID
+  end
+
+  return text, iconID, false
+end
+
+local function ScopeTag()
+  local scope = (SkyInfoTilesDB and SkyInfoTilesDB.scope) or "char"
+  return (scope == "warband") and " (WB)" or ""
 end
 
 local API = {}
 
-function API.create(parent, cfg)
-  local f = CreateFrame("Button", nil, parent, "BackdropTemplate")
-  f:SetSize(220, 40)
-  f:SetBackdrop(BACKDROP)
-  f:SetBackdropBorderColor(0, 0, 0, 1)
+local function RebuildRows(f, cfg)
+  if not f then return end
 
-  -- background
-  local bg = f:CreateTexture(nil, "BACKGROUND")
-  bg:SetAllPoints()
-  colorTex(bg, 0, 0, 0, 0.35)
-
-  -- label text
-  f.text = f:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
-  UI.Outline(f.text)
-  f.text:SetPoint("LEFT", 10, 0)
-  f.text:SetJustifyH("LEFT")
-  f.text:SetText("Currency")
-
-  -- drag hint (only when unlocked)
-  f.hint = f:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-  UI.Outline(f.hint)
-  f.hint:SetPoint("BOTTOMRIGHT", -6, 4)
-  f.hint:SetText("drag")
-  f.hint:Hide()
-
-  -- right-click to refresh
-  f:SetScript("OnMouseUp", function(self, btn)
-    if btn == "RightButton" then
-      API.update(self, cfg)
+  -- Clear old
+  for i, icon in ipairs(f._icons or {}) do SafeReleaseRegion(icon) end
+  for i, lbl in ipairs(f._labels or {}) do SafeReleaseRegion(lbl) end
+  for i, row in ipairs(f._rowFrames or {}) do
+    if row and row.SetScript then
+      row:SetScript("OnEnter", nil)
+      row:SetScript("OnLeave", nil)
     end
+    SafeReleaseRegion(row)
+  end
+  if f._separators then
+    for i, sep in ipairs(f._separators) do SafeReleaseRegion(sep) end
+  end
+  f._icons, f._labels, f._separators, f._rowFrames = {}, {}, {}, {}
+
+  f._entries = GetActiveCurrencyEntries()
+
+  local rows = #(f._entries or {})
+  local height = PAD_Y * 2 + rows * ROW_HEIGHT + 24
+  local width  = 320
+  f:SetSize(width, height)
+
+  -- Rows
+  local y = -6
+  for i, entry in ipairs(f._entries or {}) do
+    if entry.separator then
+      -- Create separator line
+      local line = f:CreateTexture(nil, "ARTWORK")
+      line:SetColorTexture(0.5, 0.5, 0.5, 0.6)
+      line:SetHeight(1)
+      line:SetPoint("TOPLEFT", f.title, "BOTTOMLEFT", 0, y - (i - 1) * ROW_HEIGHT - ROW_HEIGHT/2)
+      line:SetPoint("TOPRIGHT", f.title, "BOTTOMRIGHT", 0, y - (i - 1) * ROW_HEIGHT - ROW_HEIGHT/2)
+      f._separators[#f._separators + 1] = line
+      f._icons[i] = nil
+      f._labels[i] = nil
+      f._rowFrames[i] = nil
+    else
+      -- Regular currency row - create invisible frame for tooltip
+      local rowFrame = CreateFrame("Frame", nil, f)
+      rowFrame:SetPoint("TOPLEFT", f.title, "BOTTOMLEFT", 0, y - (i - 1) * ROW_HEIGHT)
+      rowFrame:SetSize(width - PAD_X * 2, ROW_HEIGHT)
+      rowFrame:EnableMouse(true)
+      rowFrame._entry = entry
+
+      -- Tooltip on hover
+      rowFrame:SetScript("OnEnter", function(self)
+        if not self._entry then return end
+        local currencyID = self._entry.id
+        if not currencyID then return end
+
+        GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+        GameTooltip:SetCurrencyByID(currencyID)
+        GameTooltip:Show()
+      end)
+
+      rowFrame:SetScript("OnLeave", function(self)
+        GameTooltip:Hide()
+      end)
+
+      local icon = f:CreateTexture(nil, "ARTWORK")
+      icon:SetSize(ICON_SIZE, ICON_SIZE)
+      icon:SetPoint("TOPLEFT", f.title, "BOTTOMLEFT", 0, y - (i - 1) * ROW_HEIGHT)
+
+      local fs = f:CreateFontString(nil, "OVERLAY", FONT)
+      fs:SetPoint("LEFT", icon, "RIGHT", 6, 0)
+      fs:SetTextColor(1, 1, 1, 1)
+      fs:SetShadowColor(0, 0, 0, 1)
+      fs:SetShadowOffset(1, -1)
+      fs:SetJustifyH("LEFT")
+      fs:SetText("...")
+      UI.Outline(fs)
+
+      f._icons[i]  = icon
+      f._labels[i] = fs
+      f._rowFrames[i] = rowFrame
+    end
+  end
+end
+
+function API.create(parent, cfg)
+  local f = CreateFrame("Frame", nil, parent)
+  f._entries = {}
+  f._icons, f._labels = {}, {}
+
+  -- Title
+  f.title = f:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
+  f.title:SetPoint("TOPLEFT", f, "TOPLEFT", PAD_X, -PAD_Y)
+  f.title:SetTextColor(1, 1, 1, 1)
+  f.title:SetText((cfg.label or "Currencies") .. ScopeTag())
+  UI.Outline(f.title)
+
+  RebuildRows(f, cfg)
+
+  -- Right-click => refresh
+  f:EnableMouse(true)
+  f:SetScript("OnMouseUp", function(self, btn)
+    if btn == "RightButton" then API.update(self, cfg) end
   end)
 
-  -- first paint when shown
+  -- Events for level gating and currency updates
+  f:RegisterEvent("PLAYER_ENTERING_WORLD")
+  f:RegisterEvent("PLAYER_LEVEL_UP")
+  f:RegisterEvent("CURRENCY_DISPLAY_UPDATE")
+  f:SetScript("OnEvent", function(self, event)
+    API.update(self, cfg)
+  end)
+
+  -- First paint when shown
   f:SetScript("OnShow", function(self) API.update(self, cfg) end)
 
-  function f:Destroy() end
+  function f:Destroy()
+    if self.UnregisterAllEvents then
+      self:UnregisterAllEvents()
+    end
+    if self.SetScript then
+      self:SetScript("OnEvent", nil)
+      self:SetScript("OnShow", nil)
+      self:SetScript("OnMouseUp", nil)
+    end
+  end
   return f
 end
 
 function API.update(frame, cfg)
-  local id    = cfg.id
-  local label = cfg.label
+  -- Max level gating
+  if not IsAtMaxLevel() then
+    if not (InCombatLockdown and InCombatLockdown()) then
+      if frame.Hide then frame:Hide() end
+    end
+    return
+  else
+    if not (InCombatLockdown and InCombatLockdown()) then
+      if frame.Show then frame:Show() end
+    end
+  end
+  -- Title
+  frame.title:SetText(((cfg and cfg.label) or "Currencies") .. ScopeTag())
 
-  local info = getScopedCurrencyInfo(id)
-  local line = fmtCurrencyLine(info, label)
+  -- Ensure rows are built (check if entry count changed)
+  local currentEntries = GetActiveCurrencyEntries()
+  if #(frame._entries or {}) ~= #currentEntries then
+    RebuildRows(frame, cfg)
+  end
 
-  frame.text:SetText(line)
-  if SkyInfoTilesDB and not SkyInfoTilesDB.locked then frame.hint:Show() else frame.hint:Hide() end
+  -- Rows
+  for i, entry in ipairs(frame._entries or {}) do
+    if not entry.separator then
+      local text, iconID, isSeparator = BuildLine(entry, cfg)
+      if frame._labels[i] then frame._labels[i]:SetText(text or entry.label or "?") end
+      if frame._icons[i] and iconID then frame._icons[i]:SetTexture(iconID) end
+    end
+  end
 end
 
-SkyInfoTiles.RegisterTileType("currency", API)
+SkyInfoTiles.RegisterTileType("currencies", API)

@@ -95,6 +95,13 @@ local function CreateButton(panel, text, width, height)
   return b
 end
 
+local function CreateDivider(parent)
+  local line = parent:CreateTexture(nil, "BACKGROUND")
+  line:SetColorTexture(0.4, 0.4, 0.4, 0.5)
+  line:SetHeight(1)
+  return line
+end
+
 -- Build a scrollable list (keeps panel compact as tiles grow over time)
 local function CreateScrollArea(panel, topAnchor, height)
   height = height or 260
@@ -189,6 +196,48 @@ listDivider:SetText("Enable or disable individual tiles")
 
 -- Tile checkboxes will be added dynamically below listDivider
 
+-- Divider after tile toggles
+local divider1 = CreateDivider(content)
+
+-- Currency Tile settings (inside scroll area)
+local currencyHeader = content:CreateFontString(nil, "ARTWORK", "GameFontNormalLarge")
+currencyHeader:SetText("Currencies")
+
+local currencyHint = content:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
+currencyHint:SetPoint("TOPLEFT", currencyHeader, "BOTTOMLEFT", 0, -4)
+currencyHint:SetText("Display settings for currencies tile.")
+
+local currencyHideLabel = CreateCheck(content, "Hide labels (icon + numbers only)")
+currencyHideLabel:SetPoint("TOPLEFT", currencyHint, "BOTTOMLEFT", -2, -6)
+
+local function GetCurrencyCfg()
+  if SkyInfoTiles.GetOrCreateTileCfg then
+    return SkyInfoTiles.GetOrCreateTileCfg("currencies")
+  end
+  return nil
+end
+
+local function ApplyCurrencyCfg(cfg)
+  if not cfg then return end
+  if SkyInfoTiles.Rebuild and SkyInfoTiles.UpdateAll then
+    SkyInfoTiles.Rebuild()
+    SkyInfoTiles.UpdateAll()
+  end
+  if SkyInfoTiles._OptionsRefresh then
+    SkyInfoTiles._OptionsRefresh()
+  end
+end
+
+currencyHideLabel:SetScript("OnClick", function(self)
+  local cfg = GetCurrencyCfg()
+  if not cfg then return end
+  cfg.hideLabel = self:GetChecked() and true or false
+  ApplyCurrencyCfg(cfg)
+end)
+
+-- Divider after Currencies
+local divider2 = CreateDivider(content)
+
 -- DungeonPorts settings (inside scroll area)
 local dpHeader = content:CreateFontString(nil, "ARTWORK", "GameFontNormalLarge")
 dpHeader:SetText("Dungeon Teleports")
@@ -272,6 +321,9 @@ dpScale:SetScript("OnValueChanged", function(self, value)
   cfg.scale = value
   ApplyDungeonPortsCfg(cfg)
 end)
+
+-- Divider after Dungeon Teleports
+local divider3 = CreateDivider(content)
 
 -- ============================================================
 -- ClockTile Settings (inside scroll area)
@@ -552,23 +604,43 @@ local function BuildTileList()
     end
   end
 
-  -- Position DungeonPorts settings below checkboxes
-  dpHeader:ClearAllPoints()
-  dpHeader:SetPoint("TOPLEFT", lastAnchor, "BOTTOMLEFT", 0, -20)
+  -- Position divider1 and Currency settings below checkboxes
+  divider1:ClearAllPoints()
+  divider1:SetPoint("TOPLEFT", lastAnchor, "BOTTOMLEFT", 0, -12)
+  divider1:SetPoint("RIGHT", content, "RIGHT", -10, 0)
 
-  -- Position ClockTile settings below DungeonPorts (dpScale is lowest element)
+  currencyHeader:ClearAllPoints()
+  currencyHeader:SetPoint("TOPLEFT", divider1, "BOTTOMLEFT", 0, -12)
+
+  -- Position divider2 and DungeonPorts settings below Currency
+  divider2:ClearAllPoints()
+  divider2:SetPoint("TOPLEFT", currencyHideLabel, "BOTTOMLEFT", 0, -12)
+  divider2:SetPoint("RIGHT", content, "RIGHT", -10, 0)
+
+  dpHeader:ClearAllPoints()
+  dpHeader:SetPoint("TOPLEFT", divider2, "BOTTOMLEFT", 0, -12)
+
+  -- Position divider3 and ClockTile settings below DungeonPorts (dpScale is lowest element)
+  divider3:ClearAllPoints()
+  divider3:SetPoint("TOPLEFT", dpScale, "BOTTOMLEFT", -6, -24)
+  divider3:SetPoint("RIGHT", content, "RIGHT", -10, 0)
+
   clockHeader:ClearAllPoints()
-  clockHeader:SetPoint("TOPLEFT", dpScale, "BOTTOMLEFT", -6, -25)
+  clockHeader:SetPoint("TOPLEFT", divider3, "BOTTOMLEFT", 6, -16)
 
   -- Calculate total content height
   -- Start from top, add each section's height
   local totalHeight = 30  -- listHeader + listDivider
   totalHeight = totalHeight + (#tileChecks * 26)  -- Tile checkboxes
+  totalHeight = totalHeight + 25   -- divider1 + spacing
+  totalHeight = totalHeight + 80   -- Currency section
+  totalHeight = totalHeight + 25   -- divider2 + spacing
   totalHeight = totalHeight + 120  -- DungeonPorts section
+  totalHeight = totalHeight + 25   -- divider3 + spacing
   totalHeight = totalHeight + 220  -- ClockTile section (increased for tip + more fonts)
   totalHeight = totalHeight + 50   -- Bottom padding
 
-  content:SetSize(maxW, math.max(500, totalHeight))
+  content:SetSize(math.max(500, maxW), math.max(500, totalHeight))
 
   -- Debug confirmation
   if DEFAULT_CHAT_FRAME then
@@ -585,6 +657,10 @@ local function Refresh()
       cb:SetChecked(SkyInfoTiles.GetTileEnabledByKey(key))
     end
   end
+
+  -- Currency settings
+  local currencyCfg = GetCurrencyCfg() or {}
+  currencyHideLabel:SetChecked(currencyCfg.hideLabel and true or false)
 
   -- DungeonPorts settings
   local cfg = GetDungeonPortsCfg() or {}
