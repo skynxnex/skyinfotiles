@@ -6,6 +6,26 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 SkyInfoTiles is a World of Warcraft addon that provides modular, draggable info tiles for displaying currencies, character stats, keystones, and other game information. The addon is designed for WoW Retail 12.0+ (The War Within / Midnight).
 
+## Release Process
+
+### CurseForge Automatic Releases
+
+CurseForge automatically detects and releases new versions when git tags are pushed to GitHub:
+
+1. **Bump version** in `SkyInfoTiles.toc` (e.g., `1.8.3` → `1.9.0`)
+2. **Commit changes** with descriptive message
+3. **Create git tag**: `git tag -a v1.9.0 -m "Release v1.9.0"`
+4. **Push tag**: `git push --tags`
+5. CurseForge automatically builds and publishes the release
+
+**Important:** Always use semantic versioning (MAJOR.MINOR.PATCH) and prefix tags with `v`.
+
+### Version Numbering
+
+- **MAJOR**: Breaking changes or major feature overhauls
+- **MINOR**: New features, significant improvements
+- **PATCH**: Bug fixes, minor tweaks
+
 ## Architecture
 
 ### Core System (SkyInfoTiles.lua)
@@ -230,6 +250,7 @@ SkyInfoTiles/
 - **1.7.0**: Introduced profiles system, migrated legacy `SkyInfoTilesDB.tiles` → `profiles.Default.tiles`
 - **1.7.1**: Removed deprecated tiles (healthbox, petbox, targetbox, groupbuffs) with automatic cleanup
 - **1.8.2**: Renamed "season3" tile to "currencies" for season-agnostic naming
+- **1.9.0**: Performance optimizations (event throttling, spell cache), memory leak fixes, shared Utils module, Midnight S1 portal IDs
 - Migration flags: `_migrated_171_removeDeprecatedTiles`, `_migrated_182_season3ToCurrencies`, `_helloShown`
 
 Always run migrations in `PLAYER_LOGIN` event handler before `Rebuild()`.

@@ -1,9 +1,8 @@
 # Documentation and development notes
 docs/
 
-# CLAUDE.md stays in root (Claude Code looks for it there)
+# Local development notes (machine-specific paths)
+LOCAL.md
 
 # Claude Code settings
 .claude/
-
-CLAUDE.md
