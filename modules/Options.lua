@@ -352,6 +352,10 @@ local function DiscoverFonts()
   local fonts = {}
   local seen = {}  -- Track duplicates by lowercase filename
 
+  -- Reuse same test frame to prevent memory leak
+  local testFrame = CreateFrame("Frame", nil, UIParent)
+  testFrame:Hide()
+
   -- Helper to add font if valid
   local function TryAddFont(path, displayName)
     if not path or path == "" then return end
@@ -363,8 +367,7 @@ local function DiscoverFonts()
     -- Skip duplicates
     if seen[filenameLower] then return end
 
-    -- Test if font loads
-    local testFrame = CreateFrame("Frame", nil, UIParent)
+    -- Test if font loads (reusing testFrame)
     local testFont = testFrame:CreateFontString(nil, "OVERLAY")
     local success = pcall(testFont.SetFont, testFont, path, 12, "")
 
@@ -373,10 +376,8 @@ local function DiscoverFonts()
       table.insert(fonts, { name = displayName or filename, path = path })
     end
 
-    -- Cleanup
-    testFont:SetParent(nil)
-    testFrame:Hide()
-    testFrame:SetParent(nil)
+    -- Cleanup fontstring only (reuse frame)
+    if testFont.SetParent then testFont:SetParent(nil) end
   end
 
   -- 1. WoW Built-in Fonts
@@ -775,6 +776,22 @@ do
     end
   elseif _G.InterfaceOptions_AddCategory then
     pcall(_G.InterfaceOptions_AddCategory, panel)
+  end
+end
+
+-- Start font discovery in background (to avoid UI freeze on first dropdown open)
+local fontDiscoveryStarted = false
+function SkyInfoTiles.StartFontDiscovery()
+  if fontDiscoveryStarted or FONT_LIST then return end
+  fontDiscoveryStarted = true
+
+  if C_Timer and C_Timer.After then
+    C_Timer.After(2, function()  -- 2 sec delay after login to avoid startup lag
+      FONT_LIST = DiscoverFonts()
+      if DEFAULT_CHAT_FRAME then
+        DEFAULT_CHAT_FRAME:AddMessage(string.format("|cff00ff00SkyInfoTiles:|r Discovered %d fonts in background", #FONT_LIST))
+      end
+    end)
   end
 end
 

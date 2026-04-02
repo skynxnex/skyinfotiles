@@ -257,7 +257,17 @@ function API.create(parent, cfg)
   f:RegisterEvent("PLAYER_ENTERING_WORLD")
   f:RegisterEvent("PLAYER_LEVEL_UP")
   f:RegisterEvent("CURRENCY_DISPLAY_UPDATE")
+
+  -- Throttle update calls (CURRENCY_DISPLAY_UPDATE can spam)
+  f._updateThrottle = -1  -- Initialize to -1 to allow first update
   f:SetScript("OnEvent", function(self, event)
+    if event == "CURRENCY_DISPLAY_UPDATE" then
+      local now = GetTime and GetTime() or 0
+      if self._updateThrottle > 0 and (now - self._updateThrottle) < 0.1 then
+        return  -- Throttle only after first update
+      end
+      self._updateThrottle = now
+    end
     API.update(self, cfg)
   end)
 
@@ -309,3 +319,20 @@ function API.update(frame, cfg)
 end
 
 SkyInfoTiles.RegisterTileType("currencies", API)
+
+-- Debug command to check currency data
+SLASH_SKYCURRENCYDEBUG1 = "/skycurrencydebug"
+SlashCmdList["SKYCURRENCYDEBUG"] = function()
+  if not DEFAULT_CHAT_FRAME then return end
+  DEFAULT_CHAT_FRAME:AddMessage("|cff66ccffSkyInfoTiles Currency Debug:|r")
+  for _, entry in ipairs(CURRENCIES) do
+    if not entry.separator and entry.id then
+      local ci = C_CurrencyInfo and C_CurrencyInfo.GetCurrencyInfo and C_CurrencyInfo.GetCurrencyInfo(entry.id)
+      if ci then
+        DEFAULT_CHAT_FRAME:AddMessage(string.format("  [%d] %s: %d (discovered)", entry.id, entry.label, ci.quantity or 0))
+      else
+        DEFAULT_CHAT_FRAME:AddMessage(string.format("  [%d] %s: NOT DISCOVERED", entry.id, entry.label))
+      end
+    end
+  end
+end

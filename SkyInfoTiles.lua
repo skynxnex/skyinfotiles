@@ -77,6 +77,42 @@ local function SafeGetCVarBool(name)
   return false
 end
 
+-- === Shared Utils (string normalization for teleport/dungeon matching) ===
+SkyInfoTiles.Utils = SkyInfoTiles.Utils or {}
+
+local STOP_WORDS = { ["the"]=true, ["of"]=true, ["and"]=true, ["de"]=true, ["la"]=true, ["das"]=true, ["der"]=true, ["di"]=true }
+
+-- Remove all spaces, punctuation, make lowercase
+function SkyInfoTiles.Utils.NormKey(s)
+  return (s or ""):lower():gsub("[%s:,'''%-%.%(%)]", "")
+end
+
+-- Normalize whitespace, trim, lowercase
+function SkyInfoTiles.Utils.Norm(s)
+  return (s or ""):lower():gsub("%s+", " "):gsub("^%s+", ""):gsub("%s+$", "")
+end
+
+-- Extract tokens (words), removing stop words, return tokens + normalized key
+function SkyInfoTiles.Utils.TokensFromName(s)
+  s = (s or ""):lower()
+  s = s:gsub("[:,'''%-%.%(%)]", " "):gsub("%s+", " ")
+  local tokens = {}
+  for tk in s:gmatch("%S+") do
+    if not STOP_WORDS[tk] then tokens[#tokens + 1] = tk end
+  end
+  return tokens, SkyInfoTiles.Utils.NormKey(s)
+end
+
+-- === Shared Theme Constants ===
+SkyInfoTiles.Theme = {
+  ROW_HEIGHT = 22,
+  ICON_SIZE_SMALL = 18,
+  ICON_SIZE_MEDIUM = 36,
+  PAD_X = 8,
+  PAD_Y = 6,
+  BORDER_WIDTH = 2,
+}
+
 SkyInfoTiles._pendingUiScale = SkyInfoTiles._pendingUiScale or nil
 SkyInfoTiles._pendingUseUiScale = SkyInfoTiles._pendingUseUiScale or nil
 
@@ -171,6 +207,10 @@ end
 
 function SkyInfoTiles.GetActiveTiles()
   local prof = GetActiveProfile()
+  if not prof or type(prof.tiles) ~= "table" then
+    -- Defensive: return empty table if profile is corrupt
+    return {}
+  end
   return prof.tiles
 end
 
@@ -863,6 +903,12 @@ ev:SetScript("OnEvent", function(self, event, ...)
     SkyInfoTiles.Rebuild()
     SkyInfoTiles.UpdateAll()
     if SkyInfoTiles._OptionsRefresh then SkyInfoTiles._OptionsRefresh() end
+
+    -- Start background font discovery (prevents UI freeze on first dropdown open)
+    if SkyInfoTiles.StartFontDiscovery then
+      SkyInfoTiles.StartFontDiscovery()
+    end
+
     if not SkyInfoTilesDB._helloShown then
       Print("Open Interface -> AddOns -> SkyInfoTiles to toggle tiles. Tip: /skytiles clean if you see duplicates.")
       SkyInfoTilesDB._helloShown = true

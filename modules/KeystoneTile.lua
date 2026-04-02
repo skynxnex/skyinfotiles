@@ -2,6 +2,7 @@
 local ADDON_NAME = ...
 local SkyInfoTiles = _G[ADDON_NAME]
 local UI = SkyInfoTiles.UI
+local Utils = SkyInfoTiles.Utils  -- Shared string normalization utilities
 
 local KEYSTONE_ITEM_ID = 180653
 local API = {}
@@ -25,28 +26,10 @@ local function Chat(msg)
   end
 end
 
--- Compact key (for DB keys / preset lookups)
-local function NormKey(s)
-  return (s or ""):lower():gsub("[%s:,'‘’%-%.%(%)]","")
-end
-
--- General normalize (for contains-matching)
-local function Norm(s)
-  return (s or ""):lower():gsub("%s+"," "):gsub("^%s+",""):gsub("%s+$","")
-end
-
--- Tokenize: keep words, remove punctuation, drop stopwords
-local STOP = { ["the"]=true, ["of"]=true, ["and"]=true, ["de"]=true, ["la"]=true, ["das"]=true, ["der"]=true, ["di"]=true }
-local function TokensFromName(s)
-  s = (s or ""):lower()
-  s = s:gsub("[:,'‘’%-%.%(%)]"," ")  -- punctuation => space
-  s = s:gsub("%s+"," ")
-  local tokens = {}
-  for tk in s:gmatch("%S+") do
-    if not STOP[tk] then tokens[#tokens+1] = tk end
-  end
-  return tokens, NormKey(s)
-end
+-- Use shared normalization functions from SkyInfoTiles.Utils
+local NormKey = Utils.NormKey
+local Norm = Utils.Norm
+local TokensFromName = Utils.TokensFromName
 
 local function EnsureDB()
   SkyInfoTilesDB = SkyInfoTilesDB or {}

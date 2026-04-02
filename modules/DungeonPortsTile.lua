@@ -1,7 +1,7 @@
 -- SkyInfoTiles - Dungeon Teleports tile (row of icons; hover shows name/cooldown; left-click casts teleport)
 local ADDON_NAME = ...
 local SkyInfoTiles = _G[ADDON_NAME]
--- local UI = SkyInfoTiles.UI -- (unused)
+local Utils = SkyInfoTiles.Utils  -- Shared string normalization utilities
 
 local API = {}
 
@@ -31,18 +31,17 @@ end
 -- This avoids hardcoding dungeon lists per season.
 
 -- Override pool (used when client APIs still point at an older season).
--- Source: Hero's Path / Keystone Hero teleports.
+-- Source: Keystone Hero teleport rewards (Midnight Season 1).
+-- Verified spell IDs for all 8 dungeons.
 local MIDNIGHT_S1_DUNGEONS = {
-  { name = "Magisters' Terrace",        spellName = "Keystone Hero: Magisters' Terrace" },
-  { name = "Maisara Caverns",          spellName = "Keystone Hero: Maisara Caverns" },
-  { name = "Nexus-Point Xenas",        spellName = "Keystone Hero: Nexus-Point Xenas" },
-  { name = "Windrunner Spire",         spellName = "Keystone Hero: Windrunner Spire" },
-  { name = "Algeth'ar Academy",        spellName = "Keystone Hero: Algeth'ar Academy", spellID = 393222 },
-  -- NOTE: spellID intentionally omitted for these until verified.
-  -- We resolve via spellName at runtime and also expose /skyportsdebug to print the correct IDs.
-  { name = "Seat of the Triumvirate",  spellName = "Keystone Hero: Seat of the Triumvirate" },
-  { name = "Skyreach",                 spellName = "Keystone Hero: Skyreach" },
-  { name = "Pit of Saron",             spellName = "Keystone Hero: Pit of Saron", spellID = 1254556 },
+  { name = "Maisara Caverns",          spellName = "Teleport: Maisara Caverns",          spellID = 1283521 },
+  { name = "Magisters' Terrace",       spellName = "Teleport: Magisters' Terrace",       spellID = 1283728 },
+  { name = "Nexus-Point Xenas",        spellName = "Teleport: Nexus-Point Xenas",        spellID = 1284540 },
+  { name = "Windrunner Spire",         spellName = "Teleport: Windrunner Spire",         spellID = 1290753 },
+  { name = "Algeth'ar Academy",        spellName = "Teleport: Algeth'ar Academy",        spellID = 393222 },
+  { name = "Seat of the Triumvirate",  spellName = "Teleport: Seat of the Triumvirate",  spellID = 445418 },
+  { name = "Skyreach",                 spellName = "Teleport: Skyreach",                 spellID = 159901 },
+  { name = "Pit of Saron",             spellName = "Teleport: Pit of Saron",             spellID = 464239 },
 }
 
 -- ======================== Help: print commands (easy copy) ========================
@@ -62,24 +61,24 @@ end
 
 
 -- ======================== Teleport resolving (shared logic w/ Keystone tile) ========================
-local function NormKey(s)
-  return (s or ""):lower():gsub("[%s:,'‘’%-%.%(%)]", "")
-end
+-- Use shared normalization functions from SkyInfoTiles.Utils
+local NormKey = Utils.NormKey
+local Norm = Utils.Norm
+local TokensFromName = Utils.TokensFromName
 
-local function Norm(s)
-  return (s or ""):lower():gsub("%s+", " "):gsub("^%s+", ""):gsub("%s+$", "")
-end
-
-local STOP = { ["the"] = true, ["of"] = true, ["and"] = true, ["de"] = true, ["la"] = true, ["das"] = true, ["der"] = true, ["di"] = true }
-local function TokensFromName(s)
-  s = (s or ""):lower()
-  s = s:gsub("[:,'‘’%-%.%(%)]", " ")
-  s = s:gsub("%s+", " ")
-  local tokens = {}
-  for tk in s:gmatch("%S+") do
-    if not STOP[tk] then tokens[#tokens + 1] = tk end
+-- Spell info cache (session-level to avoid repeated C_Spell.GetSpellInfo calls)
+local _spellInfoCache = {}
+local function GetSpellInfoCached(spellID)
+  if not spellID then return nil end
+  if _spellInfoCache[spellID] then
+    return _spellInfoCache[spellID]
   end
-  return tokens, NormKey(s)
+
+  local info = C_Spell and C_Spell.GetSpellInfo and C_Spell.GetSpellInfo(spellID)
+  if info then
+    _spellInfoCache[spellID] = info
+  end
+  return info
 end
 
 local function EnsureDB()
@@ -111,7 +110,7 @@ local function BuildTeleportCache()
     for slot = ofs + 1, ofs + num do
       local typ, spellID = GetSpellBookItemInfo(slot, "spell")
       if typ == "SPELL" and spellID then
-        local si = (C_Spell and C_Spell.GetSpellInfo and C_Spell.GetSpellInfo(spellID)) or nil
+        local si = GetSpellInfoCached(spellID)
         local nm = si and si.name or nil
         if type(nm) == "string" and nm ~= "" then
           local desc = (C_Spell and C_Spell.GetSpellDescription and C_Spell.GetSpellDescription(spellID))
@@ -137,11 +136,11 @@ local function ResolveTeleportForDungeon(dungeonName)
   local db = LoadTeleportMap(dungeonName)
   if db then
     if db.id and (IsPlayerSpell and IsPlayerSpell(db.id) or IsSpellKnown and IsSpellKnown(db.id)) then
-      local si = (C_Spell and C_Spell.GetSpellInfo and C_Spell.GetSpellInfo(db.id))
+      local si = GetSpellInfoCached(db.id)
       return db.id, (si and si.name) or db.name
     end
-    if db.name and C_Spell and C_Spell.GetSpellInfo then
-      local si = C_Spell.GetSpellInfo(db.name)
+    if db.name then
+      local si = GetSpellInfoCached(db.name)
       if si and si.spellID and (IsPlayerSpell(si.spellID) or IsSpellKnown(si.spellID)) then
         return si.spellID, si.name
       end
@@ -328,7 +327,7 @@ function SkyInfoTiles.FindDungeonPortSpellIDs()
         break
       end
 
-      local si = C_Spell.GetSpellInfo(cur)
+      local si = GetSpellInfoCached(cur)
       local nm = si and si.name or nil
       if nm then
         for _, rec in ipairs(targets) do
@@ -433,7 +432,7 @@ function SkyInfoTiles.SearchSpellIDsByNameSubstring(query)
         break
       end
 
-      local si = C_Spell.GetSpellInfo(cur)
+      local si = GetSpellInfoCached(cur)
       local nm = si and si.name or nil
       if nm then
         local nn = Norm(nm)
@@ -549,7 +548,7 @@ function SkyInfoTiles.SearchSpellIDsByDescriptionSubstring(query)
         break
       end
 
-      local si = C_Spell.GetSpellInfo(cur)
+      local si = GetSpellInfoCached(cur)
       local nm = si and si.name or nil
       if nm then
         local desc = GetDesc(cur)
@@ -611,10 +610,12 @@ end
 
 local function GetTeleportNameFromID(id)
   if not id then return nil end
-  if C_Spell and C_Spell.GetSpellInfo then
-    local si = C_Spell.GetSpellInfo(id)
-    return si and si.name or nil
+  -- Use cached spell info lookup
+  local si = GetSpellInfoCached(id)
+  if si and si.name then
+    return si.name
   end
+  -- Fallback to legacy API
   if GetSpellInfo then
     return GetSpellInfo(id)
   end
@@ -762,10 +763,10 @@ local function RebuildCells(frame, cfg)
     local icon = frame:CreateTexture(nil, "ARTWORK")
     icon:SetSize(ICON_SIZE, ICON_SIZE)
     icon:SetPoint("TOPLEFT", frame, "TOPLEFT", offX, offY)
+    -- Prioritize spell texture (from verified spellID) for accurate dungeon icons
+    local spellTex = GetSpellTextureSafe(d.spellID or d.spellName)
     local mapIcon = d.mapIcon or TryGetMapIcon(d.mapID)
-    local spellKey = d.spellID or d.spellName
-    local spellTex = GetSpellTextureSafe(spellKey)
-    icon:SetTexture(mapIcon or spellTex or (GetItemIcon and GetItemIcon(180653)) or 525134)
+    icon:SetTexture(spellTex or mapIcon or (GetItemIcon and GetItemIcon(180653)) or 525134)
     cell.icon = icon
 
     local border = CreateFrame("Frame", nil, frame, "BackdropTemplate")
@@ -857,10 +858,10 @@ function API.create(parent, cfg)
     local offY = vertical and (-PAD_Y - (i-1) * (ICON_SIZE + GAP_X)) or (-PAD_Y)
     cell.offX, cell.offY = offX, offY
     icon:SetPoint("TOPLEFT", f, "TOPLEFT", offX, offY)
+    -- Prioritize spell texture (from verified spellID) for accurate dungeon icons
+    local spellTex = GetSpellTextureSafe(d.spellID or d.spellName)
     local mapIcon = d.mapIcon or TryGetMapIcon(d.mapID)
-    local spellKey = d.spellID or d.spellName
-    local spellTex = GetSpellTextureSafe(spellKey)
-    icon:SetTexture(mapIcon or spellTex or (GetItemIcon and GetItemIcon(180653)) or 525134)
+    icon:SetTexture(spellTex or mapIcon or (GetItemIcon and GetItemIcon(180653)) or 525134)
     cell.icon = icon
 
     -- Border

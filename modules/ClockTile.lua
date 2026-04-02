@@ -148,30 +148,36 @@ function API.update(frame, cfg)
 
   local fontFile, size, outline, color = ReadCfg(cfg)
 
-  -- DRASTIC FIX: Recreate fontstring to force font change
-  -- This is necessary because SetFont() doesn't always trigger visual update
-  if frame.text then
-    -- Store old fontstring
+  -- Check if font actually changed (only recreate when necessary)
+  local needsRecreate = false
+  if frame._lastFont ~= fontFile or frame._lastSize ~= size or frame._lastOutline ~= outline then
+    needsRecreate = true
+    frame._lastFont = fontFile
+    frame._lastSize = size
+    frame._lastOutline = outline
+  end
+
+  if needsRecreate and frame.text then
+    -- Font changed - recreate fontstring to force visual update
     local oldText = frame.text
-    -- Create new fontstring
     frame.text = frame:CreateFontString(nil, "OVERLAY")
     frame.text:SetPoint("CENTER")
     frame.text:SetJustifyH("CENTER")
     frame.text:SetJustifyV("MIDDLE")
-    -- Hide and remove old one
     oldText:Hide()
     oldText:SetParent(nil)
-    oldText = nil
-  else
+    ApplyTextStyle(frame.text, fontFile, size, outline, color)
+  elseif not frame.text then
     -- First time - create fontstring
     frame.text = frame:CreateFontString(nil, "OVERLAY")
     frame.text:SetPoint("CENTER")
     frame.text:SetJustifyH("CENTER")
     frame.text:SetJustifyV("MIDDLE")
+    ApplyTextStyle(frame.text, fontFile, size, outline, color)
+  else
+    -- Just update color without recreating (color can change frequently)
+    ApplyTextStyle(frame.text, fontFile, size, outline, color)
   end
-
-  -- Apply style to NEW fontstring
-  ApplyTextStyle(frame.text, fontFile, size, outline, color)
 
   -- Set text
   frame.text:SetText(GetTimeText())
