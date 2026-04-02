@@ -52,6 +52,17 @@ end
 -- ======================== Preset mapping (non-1:1 names) ========================
 -- Include ID for immediate binding (locale-independent)
 local PRESET_TELEPORT_MAP = {
+  -- Midnight Season 1 dungeons (verified spell IDs from MythicDungeonPortals addon)
+  ["maisaracaverns"] = { id = 1254559, name = "Teleport: Maisara Caverns" },
+  ["magistersterrace"] = { id = 1254572, name = "Teleport: Magisters' Terrace" },
+  ["nexuspointxenas"] = { id = 1254563, name = "Teleport: Nexus-Point Xenas" },
+  ["windrunnerspire"] = { id = 1254400, name = "Teleport: Windrunner Spire" },
+  ["algetharacademy"] = { id = 393273, name = "Teleport: Algeth'ar Academy" },
+  ["seatofthetriumvirate"] = { id = 1254551, name = "Teleport: Seat of the Triumvirate" },
+  ["skyreach"] = { id = 159898, name = "Teleport: Skyreach" },
+  ["pitofsaron"] = { id = 1254555, name = "Teleport: Pit of Saron" },
+
+  -- Other dungeons
   ["prioryofthesacredflame"] = { id = 445444, name = "Path of the Light's Reverence" }, -- Priory
   ["tazaveshstreetsofwonder"] = { name = "Path of the Streetwise Merchant" },
   ["tazaveshsoleahsgambit"] = { name = "Path of the Streetwise Merchant" },
