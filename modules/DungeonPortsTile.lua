@@ -31,17 +31,17 @@ end
 -- This avoids hardcoding dungeon lists per season.
 
 -- Override pool (used when client APIs still point at an older season).
--- Source: Keystone Hero teleport rewards (Midnight Season 1).
+-- Source: MythicDungeonPortals addon (Midnight Season 1 Keystone Hero teleports).
 -- Verified spell IDs for all 8 dungeons.
 local MIDNIGHT_S1_DUNGEONS = {
-  { name = "Maisara Caverns",          spellName = "Teleport: Maisara Caverns",          spellID = 1283521 },
-  { name = "Magisters' Terrace",       spellName = "Teleport: Magisters' Terrace",       spellID = 1283728 },
-  { name = "Nexus-Point Xenas",        spellName = "Teleport: Nexus-Point Xenas",        spellID = 1284540 },
-  { name = "Windrunner Spire",         spellName = "Teleport: Windrunner Spire",         spellID = 1290753 },
-  { name = "Algeth'ar Academy",        spellName = "Teleport: Algeth'ar Academy",        spellID = 393222 },
-  { name = "Seat of the Triumvirate",  spellName = "Teleport: Seat of the Triumvirate",  spellID = 445418 },
-  { name = "Skyreach",                 spellName = "Teleport: Skyreach",                 spellID = 159901 },
-  { name = "Pit of Saron",             spellName = "Teleport: Pit of Saron",             spellID = 464239 },
+  { name = "Maisara Caverns",          spellName = "Teleport: Maisara Caverns",          spellID = 1254559 },
+  { name = "Magisters' Terrace",       spellName = "Teleport: Magisters' Terrace",       spellID = 1254572 },
+  { name = "Nexus-Point Xenas",        spellName = "Teleport: Nexus-Point Xenas",        spellID = 1254563 },
+  { name = "Windrunner Spire",         spellName = "Teleport: Windrunner Spire",         spellID = 1254400 },
+  { name = "Algeth'ar Academy",        spellName = "Teleport: Algeth'ar Academy",        spellID = 393273 },
+  { name = "Seat of the Triumvirate",  spellName = "Teleport: Seat of the Triumvirate",  spellID = 1254551 },
+  { name = "Skyreach",                 spellName = "Teleport: Skyreach",                 spellID = 159898 },
+  { name = "Pit of Saron",             spellName = "Teleport: Pit of Saron",             spellID = 1254555 },
 }
 
 -- ======================== Help: print commands (easy copy) ========================
