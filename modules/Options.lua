@@ -464,9 +464,6 @@ UIDropDownMenu_Initialize(clockFontDropdown, function(self, level)
   -- Discover fonts on first open
   if not FONT_LIST then
     FONT_LIST = DiscoverFonts()
-    if DEFAULT_CHAT_FRAME then
-      DEFAULT_CHAT_FRAME:AddMessage(string.format("|cff00ff00SkyInfoTiles:|r Discovered %d fonts!", #FONT_LIST))
-    end
   end
 
   local cfg = GetClockCfg()
@@ -642,11 +639,6 @@ local function BuildTileList()
   totalHeight = totalHeight + 50   -- Bottom padding
 
   content:SetSize(math.max(500, maxW), math.max(500, totalHeight))
-
-  -- Debug confirmation
-  if DEFAULT_CHAT_FRAME then
-    DEFAULT_CHAT_FRAME:AddMessage("|cff00ff00SkyInfoTiles Options:|r Built " .. #tileChecks .. " tile checkboxes")
-  end
 end
 
 local function Refresh()
@@ -788,9 +780,6 @@ function SkyInfoTiles.StartFontDiscovery()
   if C_Timer and C_Timer.After then
     C_Timer.After(2, function()  -- 2 sec delay after login to avoid startup lag
       FONT_LIST = DiscoverFonts()
-      if DEFAULT_CHAT_FRAME then
-        DEFAULT_CHAT_FRAME:AddMessage(string.format("|cff00ff00SkyInfoTiles:|r Discovered %d fonts in background", #FONT_LIST))
-      end
     end)
   end
 end

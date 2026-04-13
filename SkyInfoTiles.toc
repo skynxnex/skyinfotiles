@@ -2,7 +2,7 @@
 ## Title: SkyInfoTiles
 ## Notes: Modular info tiles (currencies, etc.) you can place anywhere.
 ## Author: You
-## Version: 1.9.2
+## Version: 1.9.3
 ## SavedVariables: SkyInfoTilesDB
 ## OptionalDeps: LibSharedMedia-3.0
 
