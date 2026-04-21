@@ -5,20 +5,23 @@ local UI = SkyInfoTiles.UI
 -- Current season currencies
 -- Hardcoded list of active season currencies (by ID). Update this list each season.
 local CURRENCIES = {
-  -- Primary currency
+  -- Warband transferable
+  { id = 3379, label = "Brimming Arcana" },
+  { id = 3385, label = "Luminous Dust" },
+  { id = 3316, label = "Voidlight Marl" },
   { id = 2803, label = "Undercoin" },
 
-  -- Coffer system
+  -- Separator
+  { separator = true },
+
+  -- Character-bound
+  { id = 3212, label = "Radiant Spark Dust" },
+  { id = 3377, label = "Unalloyed Abundance" },
   { id = 3310, label = "Coffer Key Shards" },
   { id = 3028, label = "Restored Coffer Key" },
   { id = 3378, label = "Dawnlight Manaflux" },
   { id = 3376, label = "Shard of Dundun" },
-
-  -- Upgrade materials
-  { id = 3212, label = "Radiant Spark Dust" },
-
-  -- Core Midnight currencies
-  { id = 3316, label = "Voidlight Marl" },
+  { id = 3400, label = "Uncontaminated Void Sample" },
 
   -- Separator
   { separator = true },
