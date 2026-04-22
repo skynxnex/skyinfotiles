@@ -23,6 +23,7 @@ local CURRENCIES = {
   { id = 3376, label = "Shard of Dundun" },
   { id = 3400, label = "Uncontaminated Void Sample" },
   { id = 3356, label = "Untainted Mana-Crystals" },
+  { id = 3418, label = "Nebulous Voidcore" },
 
   -- Separator
   { separator = true },
