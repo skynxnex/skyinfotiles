@@ -128,7 +128,13 @@ local API = {}
 
 function API.create(parent, cfg)
   local f = CreateFrame("Frame", nil, parent)
-  local rows   = 7  -- 1 title + 6 lines
+
+  -- Read config for font sizes and visibility
+  local titleSize = tonumber(cfg.titleSize) or 14
+  local lineSize = tonumber(cfg.lineSize) or 12
+  local hideTitle = cfg.hideTitle or false
+
+  local rows   = hideTitle and 6 or 7  -- 6 lines, or 1 title + 6 lines
   local height = PAD_Y * 2 + rows * ROW_HEIGHT + 6
   local width  = 360
   f:SetSize(width, height)
@@ -140,20 +146,29 @@ function API.create(parent, cfg)
   f.title:SetTextColor(1, 1, 1, 1)
   f.title:SetText(cfg.label or "Character Stats")
 
+  -- Apply title font size using UI.Outline for consistency
+  UI.Outline(f.title, { size = titleSize })
+
+  -- Hide title if configured
+  if hideTitle then
+    f.title:Hide()
+  end
+
   -- Lines
   local function makeLine(anchor, yOff)
     local fs = f:CreateFontString(nil, "OVERLAY", FONT_LINE)
     fs:SetPoint("TOPLEFT", anchor, "BOTTOMLEFT", 0, yOff or -4)
     fs:SetJustifyH("LEFT")
     fs:SetTextColor(1, 1, 1, 1)
-    fs:SetShadowColor(0, 0, 0, 1)
-    fs:SetShadowOffset(1, -1)
     fs:SetText("...")
-    UI.Outline(fs)
+    UI.Outline(fs, { size = lineSize })
     return fs
   end
 
-  f.line1 = makeLine(f.title, -6) -- iLvl
+  local firstAnchor = hideTitle and f or f.title
+  local firstYOff = hideTitle and -PAD_Y or -6
+
+  f.line1 = makeLine(firstAnchor, firstYOff) -- iLvl
   f.line2 = makeLine(f.line1)     -- Primary
   f.line3 = makeLine(f.line2)     -- Crit
   f.line4 = makeLine(f.line3)     -- Haste
@@ -202,6 +217,44 @@ function API.create(parent, cfg)
 end
 
 function API.update(frame, cfg)
+  -- Update font sizes and visibility
+  local titleSize = tonumber(cfg.titleSize) or 14
+  local lineSize = tonumber(cfg.lineSize) or 12
+  local hideTitle = cfg.hideTitle or false
+
+  -- Apply title size and visibility
+  if frame.title then
+    UI.Outline(frame.title, { size = titleSize })
+    if hideTitle then
+      frame.title:Hide()
+    else
+      frame.title:Show()
+    end
+  end
+
+  -- Apply line size
+  local lineFrames = { frame.line1, frame.line2, frame.line3, frame.line4, frame.line5, frame.line6 }
+  for _, fs in ipairs(lineFrames) do
+    if fs then
+      UI.Outline(fs, { size = lineSize })
+    end
+  end
+
+  -- Reposition first line based on title visibility
+  if frame.line1 then
+    frame.line1:ClearAllPoints()
+    if hideTitle then
+      frame.line1:SetPoint("TOPLEFT", frame, "TOPLEFT", PAD_X, -PAD_Y)
+    else
+      frame.line1:SetPoint("TOPLEFT", frame.title, "BOTTOMLEFT", 0, -6)
+    end
+  end
+
+  -- Update frame height based on title visibility
+  local rows = hideTitle and 6 or 7
+  local height = PAD_Y * 2 + rows * ROW_HEIGHT + 6
+  frame:SetSize(360, height)
+
   local ok, S_or_err = pcall(GatherStats)
   if not ok or not S_or_err then
     frame.line1:SetText("ilvl: –")

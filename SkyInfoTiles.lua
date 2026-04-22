@@ -581,6 +581,51 @@ local function ResetToCatalogDefaults()
   Print("Reset: restored catalog defaults for active profile.")
 end
 
+-- ===== Helper functions for OptionsWindow and MinimapButton =====
+function SkyInfoTiles.GetCurrencyList()
+  -- Return currency list from CurrencyTile module
+  -- This will be set by CurrencyTile.lua when it loads
+  return SkyInfoTiles._currencyList or {}
+end
+
+function SkyInfoTiles.RefreshCurrencyTile()
+  -- Find and update the currency tile
+  for _, f in ipairs(tilesFrames) do
+    if f and f._cfg and (f._cfg.key == "currencies" or f._cfg.type == "currencies") then
+      local ttype = TILE_TYPES[f._cfg.type]
+      if ttype and ttype.update then
+        ttype.update(f, f._cfg)
+      end
+      break
+    end
+  end
+end
+
+function SkyInfoTiles.ToggleLock()
+  SkyInfoTilesDB.locked = not SkyInfoTilesDB.locked
+  SkyInfoTiles.ApplyLockState()
+  Print(SkyInfoTilesDB.locked and "Locked" or "Unlocked")
+  -- Update options window if open
+  if SkyInfoTiles._OptionsRefresh then SkyInfoTiles._OptionsRefresh() end
+end
+
+function SkyInfoTiles.ApplyLockState()
+  SkyInfoTiles.SetLocked(SkyInfoTilesDB.locked)
+end
+
+function SkyInfoTiles.ResetProfile()
+  ResetToCatalogDefaults()
+end
+
+function SkyInfoTiles.CleanProfile()
+  local a, r = MigrateLegacy()
+  SeedCatalog()
+  SkyInfoTiles.Rebuild()
+  SkyInfoTiles.UpdateAll()
+  if SkyInfoTiles._OptionsRefresh then SkyInfoTiles._OptionsRefresh() end
+  return a, r
+end
+
 -- ===== Slash commands =====
 SLASH_SKYINFOTILES1 = "/skytiles"
 SLASH_SKYINFOTILES2 = "/skyinfotiles"

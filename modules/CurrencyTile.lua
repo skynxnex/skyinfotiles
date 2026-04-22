@@ -37,12 +37,66 @@ local CURRENCIES = {
   { id = 3383, label = "Adventurer Dawncrest" },
 }
 
-local function GetActiveCurrencyEntries() return CURRENCIES end
+-- Export currency list for OptionsWindow
+SkyInfoTiles._currencyList = CURRENCIES
+
+local function GetActiveCurrencyEntries()
+  -- Filter based on user selection
+  if not SkyInfoTilesDB or not SkyInfoTilesDB.currencySettings then
+    return CURRENCIES -- Show all by default
+  end
+
+  local filtered = {}
+  local lastWasSeparator = false
+
+  for _, entry in ipairs(CURRENCIES) do
+    if entry.separator then
+      -- Only add separator if we have currencies before it and not already added one
+      if #filtered > 0 and not lastWasSeparator then
+        table.insert(filtered, entry)
+        lastWasSeparator = true
+      end
+    else
+      -- Check if currency is enabled (default = true)
+      local enabled = SkyInfoTilesDB.currencySettings[entry.id]
+      if enabled == nil then enabled = true end -- Default to enabled
+
+      if enabled then
+        table.insert(filtered, entry)
+        lastWasSeparator = false
+      end
+    end
+  end
+
+  -- Remove trailing separator if exists
+  if #filtered > 0 and filtered[#filtered].separator then
+    table.remove(filtered)
+  end
+
+  return filtered
+end
 
 local function SafeReleaseRegion(r)
   if not r then return end
+
+  -- Clear content based on type
+  if r.SetText then
+    pcall(r.SetText, r, "")  -- FontString
+  end
+  if r.SetTexture then
+    pcall(r.SetTexture, r, nil)  -- Texture
+  end
+
+  -- Hide and clear points
   if r.Hide then pcall(r.Hide, r) end
+  if r.ClearAllPoints then pcall(r.ClearAllPoints, r) end
   if r.SetParent then pcall(r.SetParent, r, nil) end
+
+  -- Clear scripts for frames
+  if r.SetScript then
+    pcall(r.SetScript, r, "OnEnter", nil)
+    pcall(r.SetScript, r, "OnLeave", nil)
+  end
 end
 
 -- Layout
@@ -178,6 +232,20 @@ local function RebuildRows(f, cfg)
   if f._separators then
     for i, sep in ipairs(f._separators) do SafeReleaseRegion(sep) end
   end
+
+  -- AGGRESSIVE CLEANUP: Remove all old children except title
+  local regions = {f:GetRegions()}
+  for _, r in ipairs(regions) do
+    if r ~= f.title then -- Keep title
+      SafeReleaseRegion(r)
+    end
+  end
+
+  local children = {f:GetChildren()}
+  for _, c in ipairs(children) do
+    SafeReleaseRegion(c)
+  end
+
   f._icons, f._labels, f._separators, f._rowFrames = {}, {}, {}, {}
 
   f._entries = GetActiveCurrencyEntries()
@@ -313,9 +381,22 @@ function API.update(frame, cfg)
   -- Title
   frame.title:SetText(((cfg and cfg.label) or "Currencies") .. ScopeTag())
 
-  -- Ensure rows are built (check if entry count changed)
+  -- ALWAYS rebuild rows to ensure correct sizing when currencies are enabled/disabled
   local currentEntries = GetActiveCurrencyEntries()
-  if #(frame._entries or {}) ~= #currentEntries then
+  -- Force rebuild if entry count changed OR if entries themselves changed
+  local needsRebuild = #(frame._entries or {}) ~= #currentEntries
+
+  -- Also check if the actual entries changed (not just count)
+  if not needsRebuild and frame._entries then
+    for i, entry in ipairs(currentEntries) do
+      if not frame._entries[i] or frame._entries[i].id ~= entry.id or frame._entries[i].separator ~= entry.separator then
+        needsRebuild = true
+        break
+      end
+    end
+  end
+
+  if needsRebuild then
     RebuildRows(frame, cfg)
   end
 
