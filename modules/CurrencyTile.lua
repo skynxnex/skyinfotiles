@@ -22,6 +22,7 @@ local CURRENCIES = {
   { id = 3378, label = "Dawnlight Manaflux" },
   { id = 3376, label = "Shard of Dundun" },
   { id = 3400, label = "Uncontaminated Void Sample" },
+  { id = 3356, label = "Untainted Mana-Crystals" },
 
   -- Separator
   { separator = true },
@@ -121,22 +122,27 @@ local function BuildLine(entry, cfg)
   end
 
   -- Show progress bracket [earned/cap]
-  -- Priority: season cap > weekly cap
+  -- Show both weekly and season caps if both exist
   -- Color red if capped
-  if det and det.maxQuantity and det.maxQuantity > 0 then
-    -- Has season cap - show totalEarned/maxQuantity
-    local progress = (det.totalEarned and det.totalEarned > 0) and det.totalEarned or (det.quantity or qty or 0)
-    local isCapped = progress >= det.maxQuantity
-    local color = isCapped and "|cffff0000" or ""
-    local reset = isCapped and "|r" or ""
-    text = text .. string.format(" %s[%d/%d]%s", color, progress, det.maxQuantity, reset)
-  elseif det and det.maxWeeklyQuantity and det.maxWeeklyQuantity > 0 then
-    -- No season cap but has weekly cap - show quantityEarnedThisWeek/maxWeeklyQuantity
+  local hasWeeklyCap = det and det.maxWeeklyQuantity and det.maxWeeklyQuantity > 0
+  local hasSeasonCap = det and det.maxQuantity and det.maxQuantity > 0
+
+  if hasWeeklyCap then
+    -- Show weekly cap: quantityEarnedThisWeek/maxWeeklyQuantity
     local earned = det.quantityEarnedThisWeek or 0
     local isCapped = earned >= det.maxWeeklyQuantity
     local color = isCapped and "|cffff0000" or ""
     local reset = isCapped and "|r" or ""
     text = text .. string.format(" %s[%d/%d]%s", color, earned, det.maxWeeklyQuantity, reset)
+  end
+
+  if hasSeasonCap then
+    -- Show season cap: totalEarned/maxQuantity
+    local progress = (det.totalEarned and det.totalEarned > 0) and det.totalEarned or (det.quantity or qty or 0)
+    local isCapped = progress >= det.maxQuantity
+    local color = isCapped and "|cffff0000" or ""
+    local reset = isCapped and "|r" or ""
+    text = text .. string.format(" %s[%d/%d]%s", color, progress, det.maxQuantity, reset)
   end
 
   -- Prefer detailed icon if list icon missing
