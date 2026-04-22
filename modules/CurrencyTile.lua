@@ -24,6 +24,7 @@ local CURRENCIES = {
   { id = 3400, label = "Uncontaminated Void Sample" },
   { id = 3356, label = "Untainted Mana-Crystals" },
   { id = 3418, label = "Nebulous Voidcore" },
+  { id = 3405, label = "Field Accolade" },
 
   -- Separator
   { separator = true },
