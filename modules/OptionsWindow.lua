@@ -4,6 +4,165 @@ local SkyInfoTiles = _G[ADDON_NAME]
 -- Custom standalone options window
 local optionsFrame = nil
 
+-- Helper function to create X/Y position sliders for a tile
+local function CreatePositionSliders(parent, tileKey, tileType, yOffset)
+  local scrollChild = parent
+
+  -- ========== POSITION (X coordinate) ==========
+  local xPosLabel = scrollChild:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+  xPosLabel:SetPoint("TOPLEFT", 10, yOffset)
+  xPosLabel:SetText("X Position:")
+  xPosLabel:SetTextColor(1, 0.82, 0, 1)
+
+  local xPosSlider = CreateFrame("Slider", "SkyInfoTiles" .. tileKey .. "XPosSlider", scrollChild, "OptionsSliderTemplate")
+  xPosSlider:SetPoint("TOPLEFT", xPosLabel, "BOTTOMLEFT", 5, -20)
+  xPosSlider:SetWidth(200)
+  xPosSlider:SetMinMaxValues(-3000, 3000)
+  xPosSlider:SetValueStep(1)
+  xPosSlider:SetValue(0)
+  xPosSlider:SetObeyStepOnDrag(true)
+
+  _G[xPosSlider:GetName() .. "Low"]:SetText("-3000")
+  _G[xPosSlider:GetName() .. "High"]:SetText("3000")
+  _G[xPosSlider:GetName() .. "Text"]:SetText("0")
+
+  -- X Position EditBox
+  local xPosEditBox = CreateFrame("EditBox", nil, scrollChild, "InputBoxTemplate")
+  xPosEditBox:SetSize(60, 20)
+  xPosEditBox:SetPoint("LEFT", xPosSlider, "RIGHT", 15, 0)
+  xPosEditBox:SetAutoFocus(false)
+  xPosEditBox:SetNumeric(false)
+  xPosEditBox:SetText("0")
+  xPosEditBox:SetScript("OnEnterPressed", function(self)
+    local value = tonumber(self:GetText())
+    if value then
+      if value < -3000 then value = -3000 end
+      if value > 3000 then value = 3000 end
+      self:SetText(tostring(math.floor(value)))
+      xPosSlider:SetValue(value)
+      if SkyInfoTiles.GetActiveTiles then
+        local tiles = SkyInfoTiles.GetActiveTiles()
+        for _, tile in ipairs(tiles) do
+          if tile.key == tileKey or tile.type == tileType then
+            tile.point = "CENTER"
+            tile.x = value
+            if SkyInfoTiles.Rebuild then
+              SkyInfoTiles.Rebuild()
+            end
+            break
+          end
+        end
+      end
+    end
+    self:ClearFocus()
+  end)
+  xPosEditBox:SetScript("OnEscapePressed", function(self)
+    self:ClearFocus()
+  end)
+
+  xPosSlider:SetScript("OnValueChanged", function(self, value)
+    local rounded = math.floor(value)
+    _G[self:GetName() .. "Text"]:SetText(tostring(rounded))
+    xPosEditBox:SetText(tostring(rounded))
+    if SkyInfoTiles.GetActiveTiles then
+      local tiles = SkyInfoTiles.GetActiveTiles()
+      for _, tile in ipairs(tiles) do
+        if tile.key == tileKey or tile.type == tileType then
+          tile.point = "CENTER"
+          tile.x = rounded
+          if SkyInfoTiles.Rebuild then
+            SkyInfoTiles.Rebuild()
+          end
+          break
+        end
+      end
+    end
+  end)
+
+  yOffset = yOffset - 90
+
+  -- ========== POSITION (Y coordinate) ==========
+  local yPosLabel = scrollChild:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+  yPosLabel:SetPoint("TOPLEFT", 10, yOffset)
+  yPosLabel:SetText("Y Position:")
+  yPosLabel:SetTextColor(1, 0.82, 0, 1)
+
+  local yPosSlider = CreateFrame("Slider", "SkyInfoTiles" .. tileKey .. "YPosSlider", scrollChild, "OptionsSliderTemplate")
+  yPosSlider:SetPoint("TOPLEFT", yPosLabel, "BOTTOMLEFT", 5, -20)
+  yPosSlider:SetWidth(200)
+  yPosSlider:SetMinMaxValues(-3000, 3000)
+  yPosSlider:SetValueStep(1)
+  yPosSlider:SetValue(0)
+  yPosSlider:SetObeyStepOnDrag(true)
+
+  _G[yPosSlider:GetName() .. "Low"]:SetText("-3000")
+  _G[yPosSlider:GetName() .. "High"]:SetText("3000")
+  _G[yPosSlider:GetName() .. "Text"]:SetText("0")
+
+  -- Y Position EditBox
+  local yPosEditBox = CreateFrame("EditBox", nil, scrollChild, "InputBoxTemplate")
+  yPosEditBox:SetSize(60, 20)
+  yPosEditBox:SetPoint("LEFT", yPosSlider, "RIGHT", 15, 0)
+  yPosEditBox:SetAutoFocus(false)
+  yPosEditBox:SetNumeric(false)
+  yPosEditBox:SetText("0")
+  yPosEditBox:SetScript("OnEnterPressed", function(self)
+    local value = tonumber(self:GetText())
+    if value then
+      if value < -3000 then value = -3000 end
+      if value > 3000 then value = 3000 end
+      self:SetText(tostring(math.floor(value)))
+      yPosSlider:SetValue(value)
+      if SkyInfoTiles.GetActiveTiles then
+        local tiles = SkyInfoTiles.GetActiveTiles()
+        for _, tile in ipairs(tiles) do
+          if tile.key == tileKey or tile.type == tileType then
+            tile.point = "CENTER"
+            tile.y = value
+            if SkyInfoTiles.Rebuild then
+              SkyInfoTiles.Rebuild()
+            end
+            break
+          end
+        end
+      end
+    end
+    self:ClearFocus()
+  end)
+  yPosEditBox:SetScript("OnEscapePressed", function(self)
+    self:ClearFocus()
+  end)
+
+  yPosSlider:SetScript("OnValueChanged", function(self, value)
+    local rounded = math.floor(value)
+    _G[self:GetName() .. "Text"]:SetText(tostring(rounded))
+    yPosEditBox:SetText(tostring(rounded))
+    if SkyInfoTiles.GetActiveTiles then
+      local tiles = SkyInfoTiles.GetActiveTiles()
+      for _, tile in ipairs(tiles) do
+        if tile.key == tileKey or tile.type == tileType then
+          tile.point = "CENTER"
+          tile.y = rounded
+          if SkyInfoTiles.Rebuild then
+            SkyInfoTiles.Rebuild()
+          end
+          break
+        end
+      end
+    end
+  end)
+
+  yOffset = yOffset - 90
+
+  return {
+    xPosSlider = xPosSlider,
+    xPosEditBox = xPosEditBox,
+    yPosSlider = yPosSlider,
+    yPosEditBox = yPosEditBox,
+    newYOffset = yOffset
+  }
+end
+
 local function CreateOptionsWindow()
   if optionsFrame then return optionsFrame end
 
@@ -35,8 +194,8 @@ local function CreateOptionsWindow()
     edgeSize = 2,
     insets = { left = 2, right = 2, top = 2, bottom = 2 }
   })
-  f:SetBackdropColor(0.05, 0.05, 0.05, 0.95)
-  f:SetBackdropBorderColor(0.2, 0.2, 0.2, 1)
+  f:SetBackdropColor(0.15, 0.15, 0.15, 0.95)  -- Lighter background
+  f:SetBackdropBorderColor(0.3, 0.3, 0.3, 1)
 
   -- Title bar with gradient background
   local titleBar = CreateFrame("Frame", nil, f, "BackdropTemplate")
@@ -47,7 +206,7 @@ local function CreateOptionsWindow()
     bgFile = "Interface\\Buttons\\WHITE8X8",
     edgeFile = nil,
   })
-  titleBar:SetBackdropColor(0.1, 0.1, 0.1, 0.8)
+  titleBar:SetBackdropColor(0.2, 0.2, 0.2, 0.8)  -- Lighter title bar
   titleBar:EnableMouse(true)
   titleBar:RegisterForDrag("LeftButton")
   titleBar:SetScript("OnDragStart", function() f:StartMoving() end)
@@ -143,8 +302,8 @@ local function CreateOptionsWindow()
       edgeSize = 1,
       insets = { left = 1, right = 1, top = 1, bottom = 1 }
     })
-    tab:SetBackdropColor(0.15, 0.15, 0.15, 0.9)
-    tab:SetBackdropBorderColor(0.3, 0.3, 0.3, 1)
+    tab:SetBackdropColor(0.25, 0.25, 0.25, 0.9)  -- Lighter tabs
+    tab:SetBackdropBorderColor(0.4, 0.4, 0.4, 1)
 
     -- Text
     local text = tab:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
@@ -156,15 +315,15 @@ local function CreateOptionsWindow()
     -- Highlight
     tab:SetScript("OnEnter", function(self)
       if not self.selected then
-        self:SetBackdropColor(0.2, 0.2, 0.2, 1)
-        self:SetBackdropBorderColor(0.4, 0.4, 0.4, 1)
+        self:SetBackdropColor(0.3, 0.3, 0.3, 1)  -- Lighter hover
+        self:SetBackdropBorderColor(0.5, 0.5, 0.5, 1)
         self.text:SetTextColor(0.9, 0.9, 0.9, 1)
       end
     end)
     tab:SetScript("OnLeave", function(self)
       if not self.selected then
-        self:SetBackdropColor(0.15, 0.15, 0.15, 0.9)
-        self:SetBackdropBorderColor(0.3, 0.3, 0.3, 1)
+        self:SetBackdropColor(0.25, 0.25, 0.25, 0.9)  -- Lighter normal
+        self:SetBackdropBorderColor(0.4, 0.4, 0.4, 1)
         self.text:SetTextColor(0.7, 0.7, 0.7, 1)
       end
     end)
@@ -174,13 +333,13 @@ local function CreateOptionsWindow()
       -- Deselect all tabs
       for _, t in ipairs(tabs) do
         t.selected = false
-        t:SetBackdropColor(0.15, 0.15, 0.15, 0.9)
-        t:SetBackdropBorderColor(0.3, 0.3, 0.3, 1)
+        t:SetBackdropColor(0.25, 0.25, 0.25, 0.9)  -- Lighter deselected
+        t:SetBackdropBorderColor(0.4, 0.4, 0.4, 1)
         t.text:SetTextColor(0.7, 0.7, 0.7, 1)
       end
       -- Select this tab
       self.selected = true
-      self:SetBackdropColor(0.05, 0.05, 0.05, 1)
+      self:SetBackdropColor(0.15, 0.15, 0.15, 1)  -- Lighter selected (darker than normal for contrast)
       self:SetBackdropBorderColor(1, 0.82, 0, 1) -- Gold border
       self.text:SetTextColor(1, 0.82, 0, 1) -- Gold text
 
@@ -211,7 +370,7 @@ local function CreateOptionsWindow()
     bgFile = "Interface\\Buttons\\WHITE8X8",
     edgeFile = nil,
   })
-  contentArea:SetBackdropColor(0.08, 0.08, 0.08, 0.5)
+  contentArea:SetBackdropColor(0.18, 0.18, 0.18, 0.5)  -- Lighter content area
 
   -- === TAB 1: GENERAL ===
   local generalTab = CreateFrame("Frame", nil, contentArea)
@@ -299,9 +458,18 @@ local function CreateOptionsWindow()
   end)
   currencyTab.hideLabelCheck = hideLabelCheck
 
-  -- Scroll frame for currencies (leave space for checkbox at top and buttons at bottom)
+  -- Position sliders (X and Y)
+  local yOffsetCurr = -50
+  local currencyPosSliders = CreatePositionSliders(currencyTab, "currencies", "currencies", yOffsetCurr)
+  currencyTab.xPosSlider = currencyPosSliders.xPosSlider
+  currencyTab.xPosEditBox = currencyPosSliders.xPosEditBox
+  currencyTab.yPosSlider = currencyPosSliders.yPosSlider
+  currencyTab.yPosEditBox = currencyPosSliders.yPosEditBox
+  yOffsetCurr = currencyPosSliders.newYOffset
+
+  -- Scroll frame for currencies (leave space for position sliders and buttons)
   local scrollFrame = CreateFrame("ScrollFrame", nil, currencyTab, "UIPanelScrollFrameTemplate")
-  scrollFrame:SetPoint("TOPLEFT", 5, -40) -- Start below checkbox
+  scrollFrame:SetPoint("TOPLEFT", 5, yOffsetCurr) -- Start below position sliders
   scrollFrame:SetPoint("BOTTOMRIGHT", -25, 45) -- 45px space for buttons at bottom
 
   local scrollChild = CreateFrame("Frame", nil, scrollFrame)
@@ -414,37 +582,586 @@ local function CreateOptionsWindow()
     end
   end)
 
-  -- Helper function to create a tile tab with enable checkbox
-  local function CreateTileTab(index, tileKey, tileLabel)
-    local tab = CreateFrame("Frame", nil, contentArea)
-    tab:SetAllPoints()
-    tab:Hide()
-    tabContent[index] = tab
+  -- === TAB 3: KEYSTONE (with full settings) ===
+  local keystoneTab = CreateFrame("Frame", nil, contentArea)
+  keystoneTab:SetAllPoints()
+  keystoneTab:Hide()
+  tabContent[3] = keystoneTab
 
-    -- Enable checkbox
-    local enableCheck = CreateFrame("CheckButton", nil, tab, "UICheckButtonTemplate")
-    enableCheck:SetPoint("TOPLEFT", 10, -10)
-    enableCheck.Text:SetText("Enable " .. tileLabel)
-    enableCheck.Text:SetTextColor(1, 0.82, 0, 1)
-    enableCheck:SetScript("OnClick", function(self)
-      local enabled = self:GetChecked()
-      if SkyInfoTiles.SetTileEnabledByKey then
-        SkyInfoTiles.SetTileEnabledByKey(tileKey, enabled)
+  -- Enable checkbox
+  local keystoneEnableCheck = CreateFrame("CheckButton", nil, keystoneTab, "UICheckButtonTemplate")
+  keystoneEnableCheck:SetPoint("TOPLEFT", 10, -10)
+  keystoneEnableCheck.Text:SetText("Enable Mythic Keystone")
+  keystoneEnableCheck.Text:SetTextColor(1, 0.82, 0, 1)
+  keystoneEnableCheck:SetScript("OnClick", function(self)
+    local enabled = self:GetChecked()
+    if SkyInfoTiles.SetTileEnabledByKey then
+      SkyInfoTiles.SetTileEnabledByKey("keystone", enabled)
+    end
+  end)
+  keystoneTab.enableCheck = keystoneEnableCheck
+
+  -- Scroll frame for settings
+  local scrollFrame = CreateFrame("ScrollFrame", nil, keystoneTab, "UIPanelScrollFrameTemplate")
+  scrollFrame:SetPoint("TOPLEFT", 5, -40)
+  scrollFrame:SetPoint("BOTTOMRIGHT", -25, 10)
+
+  local scrollChild = CreateFrame("Frame", nil, scrollFrame)
+  scrollChild:SetSize(580, 800)
+  scrollFrame:SetScrollChild(scrollChild)
+
+  keystoneTab.scrollFrame = scrollFrame
+  keystoneTab.scrollChild = scrollChild
+
+  local yOffset = -10
+
+  -- ========== SCALE ==========
+  local scaleLabel = scrollChild:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+  scaleLabel:SetPoint("TOPLEFT", 10, yOffset)
+  scaleLabel:SetText("Tile Scale:")
+  scaleLabel:SetTextColor(1, 0.82, 0, 1)
+
+  local scaleSlider = CreateFrame("Slider", "SkyInfoTilesKeystoneScaleSlider", scrollChild, "OptionsSliderTemplate")
+  scaleSlider:SetPoint("TOPLEFT", scaleLabel, "BOTTOMLEFT", 5, -20)
+  scaleSlider:SetWidth(250)
+  scaleSlider:SetMinMaxValues(0.5, 2.0)
+  scaleSlider:SetValueStep(0.05)
+  scaleSlider:SetValue(1.0)
+  scaleSlider:SetObeyStepOnDrag(true)
+
+  _G[scaleSlider:GetName() .. "Low"]:SetText("50%")
+  _G[scaleSlider:GetName() .. "High"]:SetText("200%")
+  _G[scaleSlider:GetName() .. "Text"]:SetText("100%")
+
+  scaleSlider:SetScript("OnValueChanged", function(self, value)
+    _G[self:GetName() .. "Text"]:SetText(string.format("%.0f%%", value * 100))
+    if SkyInfoTiles.GetActiveTiles then
+      local tiles = SkyInfoTiles.GetActiveTiles()
+      for _, tile in ipairs(tiles) do
+        if tile.key == "keystone" or tile.type == "keystone" then
+          tile.scale = value
+          if SkyInfoTiles.UpdateAll then
+            SkyInfoTiles.UpdateAll()
+          end
+          break
+        end
       end
-    end)
-    tab.enableCheck = enableCheck
+    end
+  end)
 
-    -- Placeholder text for future settings
-    local settingsText = tab:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-    settingsText:SetPoint("TOPLEFT", 10, -45)
-    settingsText:SetTextColor(0.7, 0.7, 0.7, 1)
-    settingsText:SetText("Additional settings coming soon...")
+  keystoneTab.scaleSlider = scaleSlider
+  yOffset = yOffset - 90
 
-    return tab
-  end
+  -- ========== POSITION (X coordinate) ==========
+  local xPosLabel = scrollChild:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+  xPosLabel:SetPoint("TOPLEFT", 10, yOffset)
+  xPosLabel:SetText("X Position:")
+  xPosLabel:SetTextColor(1, 0.82, 0, 1)
 
-  -- === TAB 3: KEYSTONE ===
-  CreateTileTab(3, "keystone", "Mythic Keystone")
+  local xPosSlider = CreateFrame("Slider", "SkyInfoTilesKeystoneXPosSlider", scrollChild, "OptionsSliderTemplate")
+  xPosSlider:SetPoint("TOPLEFT", xPosLabel, "BOTTOMLEFT", 5, -20)
+  xPosSlider:SetWidth(200)
+  xPosSlider:SetMinMaxValues(-1000, 3000)
+  xPosSlider:SetValueStep(1)
+  xPosSlider:SetValue(0)
+  xPosSlider:SetObeyStepOnDrag(true)
+
+  _G[xPosSlider:GetName() .. "Low"]:SetText("-1000")
+  _G[xPosSlider:GetName() .. "High"]:SetText("3000")
+  _G[xPosSlider:GetName() .. "Text"]:SetText("0")
+
+  -- X Position EditBox (manual input)
+  local xPosEditBox = CreateFrame("EditBox", nil, scrollChild, "InputBoxTemplate")
+  xPosEditBox:SetSize(60, 20)
+  xPosEditBox:SetPoint("LEFT", xPosSlider, "RIGHT", 15, 0)
+  xPosEditBox:SetAutoFocus(false)
+  xPosEditBox:SetNumeric(false) -- Allow negative numbers
+  xPosEditBox:SetText("0")
+  xPosEditBox:SetScript("OnEnterPressed", function(self)
+    local value = tonumber(self:GetText())
+    if value then
+      if value < -3000 then value = -3000 end
+      if value > 3000 then value = 3000 end
+      self:SetText(tostring(math.floor(value)))
+      xPosSlider:SetValue(value)
+      if SkyInfoTiles.GetActiveTiles then
+        local tiles = SkyInfoTiles.GetActiveTiles()
+        for _, tile in ipairs(tiles) do
+          if tile.key == "keystone" or tile.type == "keystone" then
+            tile.point = "CENTER"  -- Always use CENTER for slider-based positioning
+            tile.x = value
+            if SkyInfoTiles.Rebuild then
+              SkyInfoTiles.Rebuild()
+            end
+            break
+          end
+        end
+      end
+    end
+    self:ClearFocus()
+  end)
+  xPosEditBox:SetScript("OnEscapePressed", function(self)
+    self:ClearFocus()
+  end)
+
+  xPosSlider:SetScript("OnValueChanged", function(self, value)
+    local rounded = math.floor(value)
+    _G[self:GetName() .. "Text"]:SetText(tostring(rounded))
+    xPosEditBox:SetText(tostring(rounded))
+    if SkyInfoTiles.GetActiveTiles then
+      local tiles = SkyInfoTiles.GetActiveTiles()
+      for _, tile in ipairs(tiles) do
+        if tile.key == "keystone" or tile.type == "keystone" then
+          tile.point = "CENTER"  -- Always use CENTER for slider-based positioning
+          tile.x = rounded
+          if SkyInfoTiles.Rebuild then
+            SkyInfoTiles.Rebuild()
+          end
+          break
+        end
+      end
+    end
+  end)
+
+  keystoneTab.xPosSlider = xPosSlider
+  keystoneTab.xPosEditBox = xPosEditBox
+  yOffset = yOffset - 90
+
+  -- ========== POSITION (Y coordinate) ==========
+  local yPosLabel = scrollChild:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+  yPosLabel:SetPoint("TOPLEFT", 10, yOffset)
+  yPosLabel:SetText("Y Position:")
+  yPosLabel:SetTextColor(1, 0.82, 0, 1)
+
+  local yPosSlider = CreateFrame("Slider", "SkyInfoTilesKeystoneYPosSlider", scrollChild, "OptionsSliderTemplate")
+  yPosSlider:SetPoint("TOPLEFT", yPosLabel, "BOTTOMLEFT", 5, -20)
+  yPosSlider:SetWidth(200)
+  yPosSlider:SetMinMaxValues(-1000, 3000)
+  yPosSlider:SetValueStep(1)
+  yPosSlider:SetValue(0)
+  yPosSlider:SetObeyStepOnDrag(true)
+
+  _G[yPosSlider:GetName() .. "Low"]:SetText("-1000")
+  _G[yPosSlider:GetName() .. "High"]:SetText("3000")
+  _G[yPosSlider:GetName() .. "Text"]:SetText("0")
+
+  -- Y Position EditBox (manual input)
+  local yPosEditBox = CreateFrame("EditBox", nil, scrollChild, "InputBoxTemplate")
+  yPosEditBox:SetSize(60, 20)
+  yPosEditBox:SetPoint("LEFT", yPosSlider, "RIGHT", 15, 0)
+  yPosEditBox:SetAutoFocus(false)
+  yPosEditBox:SetNumeric(false) -- Allow negative numbers
+  yPosEditBox:SetText("0")
+  yPosEditBox:SetScript("OnEnterPressed", function(self)
+    local value = tonumber(self:GetText())
+    if value then
+      if value < -3000 then value = -3000 end
+      if value > 3000 then value = 3000 end
+      self:SetText(tostring(math.floor(value)))
+      yPosSlider:SetValue(value)
+      if SkyInfoTiles.GetActiveTiles then
+        local tiles = SkyInfoTiles.GetActiveTiles()
+        for _, tile in ipairs(tiles) do
+          if tile.key == "keystone" or tile.type == "keystone" then
+            tile.point = "CENTER"  -- Always use CENTER for slider-based positioning
+            tile.y = value
+            if SkyInfoTiles.Rebuild then
+              SkyInfoTiles.Rebuild()
+            end
+            break
+          end
+        end
+      end
+    end
+    self:ClearFocus()
+  end)
+  yPosEditBox:SetScript("OnEscapePressed", function(self)
+    self:ClearFocus()
+  end)
+
+  yPosSlider:SetScript("OnValueChanged", function(self, value)
+    local rounded = math.floor(value)
+    _G[self:GetName() .. "Text"]:SetText(tostring(rounded))
+    yPosEditBox:SetText(tostring(rounded))
+    if SkyInfoTiles.GetActiveTiles then
+      local tiles = SkyInfoTiles.GetActiveTiles()
+      for _, tile in ipairs(tiles) do
+        if tile.key == "keystone" or tile.type == "keystone" then
+          tile.point = "CENTER"  -- Always use CENTER for slider-based positioning
+          tile.y = rounded
+          if SkyInfoTiles.Rebuild then
+            SkyInfoTiles.Rebuild()
+          end
+          break
+        end
+      end
+    end
+  end)
+
+  keystoneTab.yPosSlider = yPosSlider
+  keystoneTab.yPosEditBox = yPosEditBox
+  yOffset = yOffset - 90
+
+  -- ========== BACKGROUND ==========
+  local bgLabel = scrollChild:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+  bgLabel:SetPoint("TOPLEFT", 10, yOffset)
+  bgLabel:SetText("Background:")
+  bgLabel:SetTextColor(1, 0.82, 0, 1)
+
+  local bgEnableCheck = CreateFrame("CheckButton", nil, scrollChild, "UICheckButtonTemplate")
+  bgEnableCheck:SetPoint("TOPLEFT", bgLabel, "BOTTOMLEFT", 0, -10)
+  bgEnableCheck.Text:SetText("Show Background")
+  bgEnableCheck:SetScript("OnClick", function(self)
+    local enabled = self:GetChecked()
+    if SkyInfoTiles.GetActiveTiles then
+      local tiles = SkyInfoTiles.GetActiveTiles()
+      for _, tile in ipairs(tiles) do
+        if tile.key == "keystone" or tile.type == "keystone" then
+          tile.showBackground = enabled
+          if SkyInfoTiles.UpdateAll then
+            SkyInfoTiles.UpdateAll()
+          end
+          break
+        end
+      end
+    end
+  end)
+  keystoneTab.bgEnableCheck = bgEnableCheck
+
+  -- Use Class Color checkbox
+  local useClassColorCheck = CreateFrame("CheckButton", nil, scrollChild, "UICheckButtonTemplate")
+  useClassColorCheck:SetPoint("TOPLEFT", bgEnableCheck, "BOTTOMLEFT", 20, -10)
+  useClassColorCheck.Text:SetText("Use Class Color")
+  useClassColorCheck:SetScript("OnClick", function(self)
+    local enabled = self:GetChecked()
+    if SkyInfoTiles.GetActiveTiles then
+      local tiles = SkyInfoTiles.GetActiveTiles()
+      for _, tile in ipairs(tiles) do
+        if tile.key == "keystone" or tile.type == "keystone" then
+          tile.useClassColor = enabled
+          if SkyInfoTiles.UpdateAll then
+            SkyInfoTiles.UpdateAll()
+          end
+          -- Update UI state
+          if keystoneTab.bgColorButton then
+            if enabled then
+              keystoneTab.bgColorButton:Disable()
+              if keystoneTab.bgColorLabel then
+                keystoneTab.bgColorLabel:SetTextColor(0.5, 0.5, 0.5, 1)
+              end
+            else
+              keystoneTab.bgColorButton:Enable()
+              if keystoneTab.bgColorLabel then
+                keystoneTab.bgColorLabel:SetTextColor(1, 1, 1, 1)
+              end
+            end
+          end
+          break
+        end
+      end
+    end
+  end)
+  keystoneTab.useClassColorCheck = useClassColorCheck
+
+  -- Background color picker
+  local bgColorLabel = scrollChild:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+  bgColorLabel:SetPoint("TOPLEFT", useClassColorCheck, "BOTTOMLEFT", 0, -10)
+  bgColorLabel:SetText("Background Color:")
+
+  local bgColorButton = CreateFrame("Button", nil, scrollChild, "UIPanelButtonTemplate")
+  bgColorButton:SetSize(120, 25)
+  bgColorButton:SetPoint("TOPLEFT", bgColorLabel, "BOTTOMLEFT", 0, -5)
+  bgColorButton:SetText("Choose Color")
+
+  local bgColorSwatch = bgColorButton:CreateTexture(nil, "OVERLAY")
+  bgColorSwatch:SetSize(16, 16)
+  bgColorSwatch:SetPoint("LEFT", bgColorButton, "RIGHT", 5, 0)
+  bgColorSwatch:SetColorTexture(0, 0, 0, 0.8)
+  keystoneTab.bgColorSwatch = bgColorSwatch
+
+  keystoneTab.bgColorLabel = bgColorLabel
+  keystoneTab.bgColorButton = bgColorButton
+
+  bgColorButton:SetScript("OnClick", function(self)
+    local currentColor = { r = 0, g = 0, b = 0, a = 0.8 }
+    if SkyInfoTiles.GetActiveTiles then
+      local tiles = SkyInfoTiles.GetActiveTiles()
+      for _, tile in ipairs(tiles) do
+        if tile.key == "keystone" or tile.type == "keystone" then
+          if tile.backgroundColor then
+            currentColor = tile.backgroundColor
+          end
+          break
+        end
+      end
+    end
+
+    local lastUpdateTime = 0
+    local function OnColorChanged()
+      local r, g, b = ColorPickerFrame:GetColorRGB()
+      local a = 1
+      if ColorPickerFrame.GetColorAlpha then
+        a = ColorPickerFrame:GetColorAlpha()
+      end
+
+      bgColorSwatch:SetColorTexture(r, g, b, a)
+
+      -- Throttle updates to max 10 per second
+      local now = GetTime and GetTime() or 0
+      if (now - lastUpdateTime) < 0.1 then
+        return
+      end
+      lastUpdateTime = now
+
+      if SkyInfoTiles.GetActiveTiles then
+        local tiles = SkyInfoTiles.GetActiveTiles()
+        for _, tile in ipairs(tiles) do
+          if tile.key == "keystone" or tile.type == "keystone" then
+            tile.backgroundColor = { r = r, g = g, b = b, a = a }
+            if SkyInfoTiles.UpdateAll then
+              SkyInfoTiles.UpdateAll()
+            end
+            break
+          end
+        end
+      end
+    end
+
+    if ColorPickerFrame.SetupColorPickerAndShow then
+      local info = {
+        r = currentColor.r,
+        g = currentColor.g,
+        b = currentColor.b,
+        opacity = currentColor.a,
+        hasOpacity = true,
+        swatchFunc = OnColorChanged,
+        opacityFunc = OnColorChanged,
+        cancelFunc = function()
+          bgColorSwatch:SetColorTexture(currentColor.r, currentColor.g, currentColor.b, currentColor.a)
+          if SkyInfoTiles.GetActiveTiles then
+            local tiles = SkyInfoTiles.GetActiveTiles()
+            for _, tile in ipairs(tiles) do
+              if tile.key == "keystone" or tile.type == "keystone" then
+                tile.backgroundColor = currentColor
+                if SkyInfoTiles.UpdateAll then
+                  SkyInfoTiles.UpdateAll()
+                end
+                break
+              end
+            end
+          end
+        end,
+      }
+      ColorPickerFrame:SetupColorPickerAndShow(info)
+    else
+      if ColorPickerFrame.SetColorRGB then
+        ColorPickerFrame:SetColorRGB(currentColor.r, currentColor.g, currentColor.b)
+      end
+      ColorPickerFrame.func = OnColorChanged
+      ColorPickerFrame.opacityFunc = OnColorChanged
+      ColorPickerFrame.hasOpacity = true
+      ColorPickerFrame.opacity = currentColor.a
+      ColorPickerFrame.previousValues = { currentColor.r, currentColor.g, currentColor.b, currentColor.a }
+      ColorPickerFrame.cancelFunc = function(prev)
+        local r, g, b, a = prev[1], prev[2], prev[3], prev[4]
+        bgColorSwatch:SetColorTexture(r, g, b, a)
+        if SkyInfoTiles.GetActiveTiles then
+          local tiles = SkyInfoTiles.GetActiveTiles()
+          for _, tile in ipairs(tiles) do
+            if tile.key == "keystone" or tile.type == "keystone" then
+              tile.backgroundColor = { r = r, g = g, b = b, a = a }
+              if SkyInfoTiles.UpdateAll then
+                SkyInfoTiles.UpdateAll()
+              end
+              break
+            end
+          end
+        end
+      end
+      ColorPickerFrame:Show()
+    end
+  end)
+
+  yOffset = yOffset - 170  -- Increased to make room for "Use Class Color" checkbox and prevent overlap
+
+  -- ========== BORDER ==========
+  local borderLabel = scrollChild:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+  borderLabel:SetPoint("TOPLEFT", 10, yOffset)
+  borderLabel:SetText("Border:")
+  borderLabel:SetTextColor(1, 0.82, 0, 1)
+
+  local borderEnableCheck = CreateFrame("CheckButton", nil, scrollChild, "UICheckButtonTemplate")
+  borderEnableCheck:SetPoint("TOPLEFT", borderLabel, "BOTTOMLEFT", 0, -10)
+  borderEnableCheck.Text:SetText("Show Border")
+  borderEnableCheck:SetScript("OnClick", function(self)
+    local enabled = self:GetChecked()
+    if SkyInfoTiles.GetActiveTiles then
+      local tiles = SkyInfoTiles.GetActiveTiles()
+      for _, tile in ipairs(tiles) do
+        if tile.key == "keystone" or tile.type == "keystone" then
+          tile.showBorder = enabled
+          if SkyInfoTiles.UpdateAll then
+            SkyInfoTiles.UpdateAll()
+          end
+          break
+        end
+      end
+    end
+  end)
+  keystoneTab.borderEnableCheck = borderEnableCheck
+
+  -- Border color picker
+  local borderColorLabel = scrollChild:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+  borderColorLabel:SetPoint("TOPLEFT", borderEnableCheck, "BOTTOMLEFT", 20, -10)
+  borderColorLabel:SetText("Border Color:")
+
+  local borderColorButton = CreateFrame("Button", nil, scrollChild, "UIPanelButtonTemplate")
+  borderColorButton:SetSize(120, 25)
+  borderColorButton:SetPoint("TOPLEFT", borderColorLabel, "BOTTOMLEFT", 0, -5)
+  borderColorButton:SetText("Choose Color")
+
+  local borderColorSwatch = borderColorButton:CreateTexture(nil, "OVERLAY")
+  borderColorSwatch:SetSize(16, 16)
+  borderColorSwatch:SetPoint("LEFT", borderColorButton, "RIGHT", 5, 0)
+  borderColorSwatch:SetColorTexture(1, 1, 1, 1)
+  keystoneTab.borderColorSwatch = borderColorSwatch
+
+  borderColorButton:SetScript("OnClick", function(self)
+    local currentColor = { r = 1, g = 1, b = 1, a = 1 }
+    if SkyInfoTiles.GetActiveTiles then
+      local tiles = SkyInfoTiles.GetActiveTiles()
+      for _, tile in ipairs(tiles) do
+        if tile.key == "keystone" or tile.type == "keystone" then
+          if tile.borderColor then
+            currentColor = tile.borderColor
+          end
+          break
+        end
+      end
+    end
+
+    local lastBorderUpdateTime = 0
+    local function OnColorChanged()
+      local r, g, b = ColorPickerFrame:GetColorRGB()
+      local a = 1
+      if ColorPickerFrame.GetColorAlpha then
+        a = ColorPickerFrame:GetColorAlpha()
+      end
+
+      borderColorSwatch:SetColorTexture(r, g, b, a)
+
+      -- Throttle updates to max 10 per second
+      local now = GetTime and GetTime() or 0
+      if (now - lastBorderUpdateTime) < 0.1 then
+        return
+      end
+      lastBorderUpdateTime = now
+
+      if SkyInfoTiles.GetActiveTiles then
+        local tiles = SkyInfoTiles.GetActiveTiles()
+        for _, tile in ipairs(tiles) do
+          if tile.key == "keystone" or tile.type == "keystone" then
+            tile.borderColor = { r = r, g = g, b = b, a = a }
+            if SkyInfoTiles.UpdateAll then
+              SkyInfoTiles.UpdateAll()
+            end
+            break
+          end
+        end
+      end
+    end
+
+    if ColorPickerFrame.SetupColorPickerAndShow then
+      local info = {
+        r = currentColor.r,
+        g = currentColor.g,
+        b = currentColor.b,
+        opacity = currentColor.a,
+        hasOpacity = true,
+        swatchFunc = OnColorChanged,
+        opacityFunc = OnColorChanged,
+        cancelFunc = function()
+          borderColorSwatch:SetColorTexture(currentColor.r, currentColor.g, currentColor.b, currentColor.a)
+          if SkyInfoTiles.GetActiveTiles then
+            local tiles = SkyInfoTiles.GetActiveTiles()
+            for _, tile in ipairs(tiles) do
+              if tile.key == "keystone" or tile.type == "keystone" then
+                tile.borderColor = currentColor
+                if SkyInfoTiles.UpdateAll then
+                  SkyInfoTiles.UpdateAll()
+                end
+                break
+              end
+            end
+          end
+        end,
+      }
+      ColorPickerFrame:SetupColorPickerAndShow(info)
+    else
+      if ColorPickerFrame.SetColorRGB then
+        ColorPickerFrame:SetColorRGB(currentColor.r, currentColor.g, currentColor.b)
+      end
+      ColorPickerFrame.func = OnColorChanged
+      ColorPickerFrame.opacityFunc = OnColorChanged
+      ColorPickerFrame.hasOpacity = true
+      ColorPickerFrame.opacity = currentColor.a
+      ColorPickerFrame.previousValues = { currentColor.r, currentColor.g, currentColor.b, currentColor.a }
+      ColorPickerFrame.cancelFunc = function(prev)
+        local r, g, b, a = prev[1], prev[2], prev[3], prev[4]
+        borderColorSwatch:SetColorTexture(r, g, b, a)
+        if SkyInfoTiles.GetActiveTiles then
+          local tiles = SkyInfoTiles.GetActiveTiles()
+          for _, tile in ipairs(tiles) do
+            if tile.key == "keystone" or tile.type == "keystone" then
+              tile.borderColor = { r = r, g = g, b = b, a = a }
+              if SkyInfoTiles.UpdateAll then
+                SkyInfoTiles.UpdateAll()
+              end
+              break
+            end
+          end
+        end
+      end
+      ColorPickerFrame:Show()
+    end
+  end)
+
+  -- Border thickness slider
+  local borderThicknessLabel = scrollChild:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+  borderThicknessLabel:SetPoint("TOPLEFT", borderColorLabel, "BOTTOMLEFT", -20, -40)
+  borderThicknessLabel:SetText("Border Thickness:")
+
+  local borderThicknessSlider = CreateFrame("Slider", "SkyInfoTilesKeystoneBorderThicknessSlider", scrollChild, "OptionsSliderTemplate")
+  borderThicknessSlider:SetPoint("TOPLEFT", borderThicknessLabel, "BOTTOMLEFT", 5, -20)
+  borderThicknessSlider:SetWidth(250)
+  borderThicknessSlider:SetMinMaxValues(1, 10)
+  borderThicknessSlider:SetValueStep(1)
+  borderThicknessSlider:SetValue(2)
+  borderThicknessSlider:SetObeyStepOnDrag(true)
+
+  _G[borderThicknessSlider:GetName() .. "Low"]:SetText("1")
+  _G[borderThicknessSlider:GetName() .. "High"]:SetText("10")
+  _G[borderThicknessSlider:GetName() .. "Text"]:SetText("2")
+
+  borderThicknessSlider:SetScript("OnValueChanged", function(self, value)
+    value = math.floor(value + 0.5)
+    _G[self:GetName() .. "Text"]:SetText(tostring(value))
+
+    if SkyInfoTiles.GetActiveTiles then
+      local tiles = SkyInfoTiles.GetActiveTiles()
+      for _, tile in ipairs(tiles) do
+        if tile.key == "keystone" or tile.type == "keystone" then
+          tile.borderThickness = value
+          if SkyInfoTiles.UpdateAll then
+            SkyInfoTiles.UpdateAll()
+          end
+          break
+        end
+      end
+    end
+  end)
+
+  keystoneTab.borderThicknessSlider = borderThicknessSlider
 
   -- === TAB 4: CHAR STATS (with stat order customization) ===
   local charStatsTab = CreateFrame("Frame", nil, contentArea)
@@ -465,9 +1182,18 @@ local function CreateOptionsWindow()
   end)
   charStatsTab.enableCheck = charStatsEnableCheck
 
+  -- Position sliders (X and Y)
+  local yOffsetChar = -50
+  local charStatsPosSliders = CreatePositionSliders(charStatsTab, "charstats", "charstats", yOffsetChar)
+  charStatsTab.xPosSlider = charStatsPosSliders.xPosSlider
+  charStatsTab.xPosEditBox = charStatsPosSliders.xPosEditBox
+  charStatsTab.yPosSlider = charStatsPosSliders.yPosSlider
+  charStatsTab.yPosEditBox = charStatsPosSliders.yPosEditBox
+  yOffsetChar = charStatsPosSliders.newYOffset
+
   -- Scroll frame for settings
   local scrollFrame = CreateFrame("ScrollFrame", nil, charStatsTab, "UIPanelScrollFrameTemplate")
-  scrollFrame:SetPoint("TOPLEFT", 5, -40) -- Start below checkbox
+  scrollFrame:SetPoint("TOPLEFT", 5, yOffsetChar) -- Start below position sliders
   scrollFrame:SetPoint("BOTTOMRIGHT", -25, 10)
 
   local scrollChild = CreateFrame("Frame", nil, scrollFrame)
@@ -1129,9 +1855,18 @@ local function CreateOptionsWindow()
   end)
   clockTab.enableCheck = clockEnableCheck
 
+  -- Position sliders (X and Y)
+  local yOffsetClock = -50
+  local clockPosSliders = CreatePositionSliders(clockTab, "clock", "clock", yOffsetClock)
+  clockTab.xPosSlider = clockPosSliders.xPosSlider
+  clockTab.xPosEditBox = clockPosSliders.xPosEditBox
+  clockTab.yPosSlider = clockPosSliders.yPosSlider
+  clockTab.yPosEditBox = clockPosSliders.yPosEditBox
+  yOffsetClock = clockPosSliders.newYOffset
+
   -- Font dropdown label
   local fontLabel = clockTab:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-  fontLabel:SetPoint("TOPLEFT", 10, -45)
+  fontLabel:SetPoint("TOPLEFT", 10, yOffsetClock)
   fontLabel:SetText("Font:")
   fontLabel:SetTextColor(1, 0.82, 0, 1)
 
@@ -1353,9 +2088,18 @@ local function CreateOptionsWindow()
   end)
   dungeonTab.enableCheck = dungeonEnableCheck
 
+  -- Position sliders (X and Y)
+  local yOffsetDungeon = -50
+  local dungeonPosSliders = CreatePositionSliders(dungeonTab, "dungeonports", "dungeonports", yOffsetDungeon)
+  dungeonTab.xPosSlider = dungeonPosSliders.xPosSlider
+  dungeonTab.xPosEditBox = dungeonPosSliders.xPosEditBox
+  dungeonTab.yPosSlider = dungeonPosSliders.yPosSlider
+  dungeonTab.yPosEditBox = dungeonPosSliders.yPosEditBox
+  yOffsetDungeon = dungeonPosSliders.newYOffset
+
   -- Orientation label
   local orientLabel = dungeonTab:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-  orientLabel:SetPoint("TOPLEFT", 10, -45)
+  orientLabel:SetPoint("TOPLEFT", 10, yOffsetDungeon)
   orientLabel:SetText("Layout Orientation:")
   orientLabel:SetTextColor(1, 0.82, 0, 1)
 
@@ -1474,7 +2218,132 @@ local function RefreshOptionsWindow()
     f.tabContent[4].RebuildStatList()
   end
 
-  -- Other refresh logic already in place below...
+  -- Refresh keystone settings
+  if f.tabContent and f.tabContent[3] then
+    local keystoneTab = f.tabContent[3]
+    local scale = 1.0
+    local xPos = 0
+    local yPos = 0
+    local showBackground = false
+    local useClassColor = false
+    local backgroundColor = { r = 0, g = 0, b = 0, a = 0.8 }
+    local showBorder = false
+    local borderColor = { r = 1, g = 1, b = 1, a = 1 }
+    local borderThickness = 2
+
+    if SkyInfoTiles.GetActiveTiles then
+      local tiles = SkyInfoTiles.GetActiveTiles()
+      for _, tile in ipairs(tiles) do
+        if tile.key == "keystone" or tile.type == "keystone" then
+          scale = tile.scale or 1.0
+          xPos = tile.x or 0
+          yPos = tile.y or 0
+          showBackground = tile.showBackground or false
+          useClassColor = tile.useClassColor or false
+          backgroundColor = tile.backgroundColor or backgroundColor
+          showBorder = tile.showBorder or false
+          borderColor = tile.borderColor or borderColor
+          borderThickness = tile.borderThickness or 2
+          break
+        end
+      end
+    end
+
+    if keystoneTab.scaleSlider then
+      keystoneTab.scaleSlider:SetValue(scale)
+      _G[keystoneTab.scaleSlider:GetName() .. "Text"]:SetText(string.format("%.0f%%", scale * 100))
+    end
+    if keystoneTab.xPosSlider then
+      keystoneTab.xPosSlider:SetValue(xPos)
+      _G[keystoneTab.xPosSlider:GetName() .. "Text"]:SetText(tostring(math.floor(xPos)))
+    end
+    if keystoneTab.xPosEditBox then
+      keystoneTab.xPosEditBox:SetText(tostring(math.floor(xPos)))
+    end
+    if keystoneTab.yPosSlider then
+      keystoneTab.yPosSlider:SetValue(yPos)
+      _G[keystoneTab.yPosSlider:GetName() .. "Text"]:SetText(tostring(math.floor(yPos)))
+    end
+    if keystoneTab.yPosEditBox then
+      keystoneTab.yPosEditBox:SetText(tostring(math.floor(yPos)))
+    end
+    if keystoneTab.bgEnableCheck then
+      keystoneTab.bgEnableCheck:SetChecked(showBackground)
+    end
+    if keystoneTab.useClassColorCheck then
+      keystoneTab.useClassColorCheck:SetChecked(useClassColor)
+    end
+    if keystoneTab.bgColorSwatch then
+      keystoneTab.bgColorSwatch:SetColorTexture(backgroundColor.r, backgroundColor.g, backgroundColor.b, backgroundColor.a)
+    end
+    -- Enable/disable color picker based on useClassColor
+    if keystoneTab.bgColorButton then
+      if useClassColor then
+        keystoneTab.bgColorButton:Disable()
+      else
+        keystoneTab.bgColorButton:Enable()
+      end
+    end
+    if keystoneTab.bgColorLabel then
+      if useClassColor then
+        keystoneTab.bgColorLabel:SetTextColor(0.5, 0.5, 0.5, 1)
+      else
+        keystoneTab.bgColorLabel:SetTextColor(1, 1, 1, 1)
+      end
+    end
+    if keystoneTab.borderEnableCheck then
+      keystoneTab.borderEnableCheck:SetChecked(showBorder)
+    end
+    if keystoneTab.borderColorSwatch then
+      keystoneTab.borderColorSwatch:SetColorTexture(borderColor.r, borderColor.g, borderColor.b, borderColor.a)
+    end
+    if keystoneTab.borderThicknessSlider then
+      keystoneTab.borderThicknessSlider:SetValue(borderThickness)
+      _G[keystoneTab.borderThicknessSlider:GetName() .. "Text"]:SetText(tostring(borderThickness))
+    end
+  end
+
+  -- Refresh position sliders for all tiles
+  local tilesWithPosition = {
+    {index = 2, key = "currencies"},
+    {index = 4, key = "charstats"},
+    {index = 6, key = "clock"},
+    {index = 7, key = "dungeonports"}
+  }
+
+  for _, tileInfo in ipairs(tilesWithPosition) do
+    if f.tabContent and f.tabContent[tileInfo.index] then
+      local tab = f.tabContent[tileInfo.index]
+      local xPos = 0
+      local yPos = 0
+
+      if SkyInfoTiles.GetActiveTiles then
+        local tiles = SkyInfoTiles.GetActiveTiles()
+        for _, tile in ipairs(tiles) do
+          if tile.key == tileInfo.key or tile.type == tileInfo.key then
+            xPos = tile.x or 0
+            yPos = tile.y or 0
+            break
+          end
+        end
+      end
+
+      if tab.xPosSlider then
+        tab.xPosSlider:SetValue(xPos)
+        _G[tab.xPosSlider:GetName() .. "Text"]:SetText(tostring(math.floor(xPos)))
+      end
+      if tab.xPosEditBox then
+        tab.xPosEditBox:SetText(tostring(math.floor(xPos)))
+      end
+      if tab.yPosSlider then
+        tab.yPosSlider:SetValue(yPos)
+        _G[tab.yPosSlider:GetName() .. "Text"]:SetText(tostring(math.floor(yPos)))
+      end
+      if tab.yPosEditBox then
+        tab.yPosEditBox:SetText(tostring(math.floor(yPos)))
+      end
+    end
+  end
 end
 
 -- Export refresh function
@@ -1531,6 +2400,91 @@ function SkyInfoTiles.ToggleOptionsWindow()
           end
         end
         f.tabContent[tabIndex].enableCheck:SetChecked(enabled)
+      end
+    end
+
+    -- Refresh keystone settings
+    if f.tabContent and f.tabContent[3] then
+      local keystoneTab = f.tabContent[3]
+      local scale = 1.0
+      local xPos = 0
+      local yPos = 0
+      local showBackground = false
+      local useClassColor = false
+      local backgroundColor = { r = 0, g = 0, b = 0, a = 0.8 }
+      local showBorder = false
+      local borderColor = { r = 1, g = 1, b = 1, a = 1 }
+      local borderThickness = 2
+
+      if SkyInfoTiles.GetActiveTiles then
+        local tiles = SkyInfoTiles.GetActiveTiles()
+        for _, tile in ipairs(tiles) do
+          if tile.key == "keystone" or tile.type == "keystone" then
+            scale = tile.scale or 1.0
+            xPos = tile.x or 0
+            yPos = tile.y or 0
+            showBackground = tile.showBackground or false
+            useClassColor = tile.useClassColor or false
+            backgroundColor = tile.backgroundColor or backgroundColor
+            showBorder = tile.showBorder or false
+            borderColor = tile.borderColor or borderColor
+            borderThickness = tile.borderThickness or 2
+            break
+          end
+        end
+      end
+
+      if keystoneTab.scaleSlider then
+        keystoneTab.scaleSlider:SetValue(scale)
+        _G[keystoneTab.scaleSlider:GetName() .. "Text"]:SetText(string.format("%.0f%%", scale * 100))
+      end
+      if keystoneTab.xPosSlider then
+        keystoneTab.xPosSlider:SetValue(xPos)
+        _G[keystoneTab.xPosSlider:GetName() .. "Text"]:SetText(tostring(math.floor(xPos)))
+      end
+      if keystoneTab.xPosEditBox then
+        keystoneTab.xPosEditBox:SetText(tostring(math.floor(xPos)))
+      end
+      if keystoneTab.yPosSlider then
+        keystoneTab.yPosSlider:SetValue(yPos)
+        _G[keystoneTab.yPosSlider:GetName() .. "Text"]:SetText(tostring(math.floor(yPos)))
+      end
+      if keystoneTab.yPosEditBox then
+        keystoneTab.yPosEditBox:SetText(tostring(math.floor(yPos)))
+      end
+      if keystoneTab.bgEnableCheck then
+        keystoneTab.bgEnableCheck:SetChecked(showBackground)
+      end
+      if keystoneTab.useClassColorCheck then
+        keystoneTab.useClassColorCheck:SetChecked(useClassColor)
+      end
+      if keystoneTab.bgColorSwatch then
+        keystoneTab.bgColorSwatch:SetColorTexture(backgroundColor.r, backgroundColor.g, backgroundColor.b, backgroundColor.a)
+      end
+      -- Enable/disable color picker based on useClassColor
+      if keystoneTab.bgColorButton then
+        if useClassColor then
+          keystoneTab.bgColorButton:Disable()
+        else
+          keystoneTab.bgColorButton:Enable()
+        end
+      end
+      if keystoneTab.bgColorLabel then
+        if useClassColor then
+          keystoneTab.bgColorLabel:SetTextColor(0.5, 0.5, 0.5, 1)
+        else
+          keystoneTab.bgColorLabel:SetTextColor(1, 1, 1, 1)
+        end
+      end
+      if keystoneTab.borderEnableCheck then
+        keystoneTab.borderEnableCheck:SetChecked(showBorder)
+      end
+      if keystoneTab.borderColorSwatch then
+        keystoneTab.borderColorSwatch:SetColorTexture(borderColor.r, borderColor.g, borderColor.b, borderColor.a)
+      end
+      if keystoneTab.borderThicknessSlider then
+        keystoneTab.borderThicknessSlider:SetValue(borderThickness)
+        _G[keystoneTab.borderThicknessSlider:GetName() .. "Text"]:SetText(tostring(borderThickness))
       end
     end
 
@@ -1685,6 +2639,48 @@ function SkyInfoTiles.ToggleOptionsWindow()
         end
       end
       UIDropDownMenu_SetText(f.tabContent[7].orientDropdown, orientation == "horizontal" and "Horizontal" or "Vertical")
+    end
+
+    -- Refresh position sliders for all tiles
+    local tilesWithPosition = {
+      {index = 2, key = "currencies"},
+      {index = 4, key = "charstats"},
+      {index = 6, key = "clock"},
+      {index = 7, key = "dungeonports"}
+    }
+
+    for _, tileInfo in ipairs(tilesWithPosition) do
+      if f.tabContent and f.tabContent[tileInfo.index] then
+        local tab = f.tabContent[tileInfo.index]
+        local xPos = 0
+        local yPos = 0
+
+        if SkyInfoTiles.GetActiveTiles then
+          local tiles = SkyInfoTiles.GetActiveTiles()
+          for _, tile in ipairs(tiles) do
+            if tile.key == tileInfo.key or tile.type == tileInfo.key then
+              xPos = tile.x or 0
+              yPos = tile.y or 0
+              break
+            end
+          end
+        end
+
+        if tab.xPosSlider then
+          tab.xPosSlider:SetValue(xPos)
+          _G[tab.xPosSlider:GetName() .. "Text"]:SetText(tostring(math.floor(xPos)))
+        end
+        if tab.xPosEditBox then
+          tab.xPosEditBox:SetText(tostring(math.floor(xPos)))
+        end
+        if tab.yPosSlider then
+          tab.yPosSlider:SetValue(yPos)
+          _G[tab.yPosSlider:GetName() .. "Text"]:SetText(tostring(math.floor(yPos)))
+        end
+        if tab.yPosEditBox then
+          tab.yPosEditBox:SetText(tostring(math.floor(yPos)))
+        end
+      end
     end
 
     f:Show()

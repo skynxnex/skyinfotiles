@@ -479,8 +479,31 @@ local function SetMovable(f)
       end)
       local function StopDragging(self)
         if self.StopMovingOrSizing then self:StopMovingOrSizing() end
-        local point, _, _, x, y = self:GetPoint()
-        if self._cfg then self._cfg.point, self._cfg.x, self._cfg.y = point, x, y end
+        if self._cfg then
+          -- Convert to CENTER-based coordinates for all tiles except crosshair (for consistency with sliders)
+          if self._cfg.key ~= "crosshair" and self._cfg.type ~= "crosshair" then
+            local frameCenterX, frameCenterY = self:GetCenter()
+            if frameCenterX and frameCenterY and UIParent then
+              local screenCenterX, screenCenterY = UIParent:GetCenter()
+              if screenCenterX and screenCenterY then
+                local offsetX = frameCenterX - screenCenterX
+                local offsetY = frameCenterY - screenCenterY
+                self._cfg.point = "CENTER"
+                self._cfg.x = math.floor(offsetX + 0.5)
+                self._cfg.y = math.floor(offsetY + 0.5)
+              end
+            end
+          else
+            -- For crosshair, keep fixed at screen center
+            self._cfg.point = "CENTER"
+            self._cfg.x = 0
+            self._cfg.y = 0
+          end
+          -- Update options window if it's open
+          if SkyInfoTiles._OptionsRefresh then
+            SkyInfoTiles._OptionsRefresh()
+          end
+        end
       end
       pcall(f.SetScript, f, "OnDragStop", StopDragging)
       if f.SetScript then

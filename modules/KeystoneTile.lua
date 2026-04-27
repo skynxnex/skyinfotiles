@@ -377,6 +377,43 @@ function SkyInfoTiles.DebugKeystoneTeleport()
   end
 end
 
+function SkyInfoTiles.DebugKeystoneBackground()
+  Chat("=== KeystoneTile Background Debug ===")
+  if SkyInfoTiles.GetActiveTiles then
+    local tiles = SkyInfoTiles.GetActiveTiles()
+    for _, tile in ipairs(tiles) do
+      if tile.key == "keystone" or tile.type == "keystone" then
+        Chat(("showBackground: %s"):format(tostring(tile.showBackground)))
+        if tile.backgroundColor then
+          Chat(("backgroundColor: r=%.2f g=%.2f b=%.2f a=%.2f"):format(
+            tile.backgroundColor.r or 0,
+            tile.backgroundColor.g or 0,
+            tile.backgroundColor.b or 0,
+            tile.backgroundColor.a or 0
+          ))
+        else
+          Chat("backgroundColor: nil (using default: black)")
+        end
+        Chat(("showBorder: %s"):format(tostring(tile.showBorder)))
+        if tile.borderColor then
+          Chat(("borderColor: r=%.2f g=%.2f b=%.2f a=%.2f"):format(
+            tile.borderColor.r or 0,
+            tile.borderColor.g or 0,
+            tile.borderColor.b or 0,
+            tile.borderColor.a or 0
+          ))
+        else
+          Chat("borderColor: nil (using default: white)")
+        end
+        return
+      end
+    end
+    Chat("Keystone tile not found in active tiles!")
+  else
+    Chat("SkyInfoTiles.GetActiveTiles not available!")
+  end
+end
+
 -- ======================== Bind to ICON (secure) ========================
 local function BindTeleportToButton(btn, dungeonName)
   local spellID, spellName = ResolveTeleportForDungeon(dungeonName)
@@ -415,17 +452,39 @@ end
 
 -- ======================== Tile ========================
 function API.create(parent, cfg)
+  -- Create wrapper frame (doesn't scale, only holds position)
   local f = CreateFrame("Frame", nil, parent)
-  f:SetSize(600, 64)
+  -- Height: 8px top padding + 36px icon + 8px bottom padding = 52px (was 64px)
+  f:SetSize(300, 52)
+  f._cfg = cfg
 
-  -- Icon
-  f.icon = f:CreateTexture(nil, "ARTWORK")
+  -- Create content frame with BackdropTemplate (this is what scales, includes backdrop directly)
+  f.content = CreateFrame("Frame", nil, f, "BackdropTemplate")
+  f.content:SetSize(300, 52)
+  f.content:SetPoint("TOPLEFT", f, "TOPLEFT", 0, 0)
+
+  -- Set initial backdrop (will be updated later)
+  f.content:SetBackdrop({
+    bgFile = nil,
+    edgeFile = nil,
+    tile = false,
+    edgeSize = 1,
+    insets = { left = 0, right = 0, top = 0, bottom = 0 }
+  })
+  f.content:SetBackdropColor(0, 0, 0, 0)
+  f.content:SetBackdropBorderColor(0, 0, 0, 0)
+
+  -- Keep reference to backdrop for code compatibility
+  f.backdrop = f.content
+
+  -- Icon (created on content frame)
+  f.icon = f.content:CreateTexture(nil, "ARTWORK")
   f.icon:SetSize(ICON_SIZE, ICON_SIZE)
-  f.icon:SetPoint("TOPLEFT", f, "TOPLEFT", 8, -8)
+  f.icon:SetPoint("TOPLEFT", f.content, "TOPLEFT", 8, -8)
   f.icon:SetTexture((GetItemIcon and GetItemIcon(KEYSTONE_ITEM_ID)) or 525134)
 
   -- Dark border (non-mouse)
-  f.iconBorder = CreateFrame("Frame", nil, f, "BackdropTemplate")
+  f.iconBorder = CreateFrame("Frame", nil, f.content, "BackdropTemplate")
   f.iconBorder:SetPoint("TOPLEFT",     f.icon, -BORDER_PX,  BORDER_PX)
   f.iconBorder:SetPoint("BOTTOMRIGHT", f.icon,  BORDER_PX, -BORDER_PX)
   f.iconBorder:SetBackdrop({ edgeFile = "Interface\\Buttons\\WHITE8x8", edgeSize = BORDER_PX })
@@ -433,7 +492,7 @@ function API.create(parent, cfg)
   f.iconBorder:EnableMouse(false)
 
   -- Level
-  f.level = f:CreateFontString(nil, "OVERLAY", "GameFontNormalHuge")
+  f.level = f.content:CreateFontString(nil, "OVERLAY", "GameFontNormalHuge")
   UI.Outline(f.level, { weight = "THICKOUTLINE" })
   f.level:SetPoint("LEFT", f.icon, "RIGHT", 8, 0)
   f.level:SetTextColor(1.00, 0.82, 0.00, 1)
@@ -442,22 +501,23 @@ function API.create(parent, cfg)
   do local font, _, flags = f.level:GetFont(); f.level:SetFont(font, ICON_SIZE, flags or "OUTLINE") end
   f.level:SetText("--")
 
-  -- Dungeon name
-  f.name = f:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
+  -- Dungeon name (with word wrap enabled)
+  f.name = f.content:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
   UI.Outline(f.name)
   f.name:SetPoint("LEFT", f.level, "RIGHT", 12, -2)
-  f.name:SetPoint("RIGHT", f, "RIGHT", -8, 0)
+  f.name:SetPoint("RIGHT", f.content, "RIGHT", -8, 0)
   f.name:SetTextColor(1.00, 0.60, 0.00, 1)
   f.name:SetShadowColor(0,0,0,1); f.name:SetShadowOffset(1,-1)
   f.name:SetJustifyH("LEFT")
-  if f.name.SetWordWrap     then f.name:SetWordWrap(false) end
+  f.name:SetJustifyV("TOP")
+  if f.name.SetWordWrap     then f.name:SetWordWrap(true) end
   if f.name.SetNonSpaceWrap then f.name:SetNonSpaceWrap(false) end
-  if f.name.SetMaxLines     then f.name:SetMaxLines(1) end
-  do local font, _, flags = f.name:GetFont(); f.name:SetFont(font, 20, flags or "OUTLINE") end
+  if f.name.SetMaxLines     then f.name:SetMaxLines(2) end
+  do local font, _, flags = f.name:GetFont(); f.name:SetFont(font, 18, flags or "OUTLINE") end
   f.name:SetText("No keystone")
 
   -- Subtitle removed per request
-  f.subtitle = f:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+  f.subtitle = f.content:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
   f.subtitle:Hide()
 
   -- Secure click-to-cast overlay ONLY ON ICON (create only when safe)
@@ -468,15 +528,15 @@ function API.create(parent, cfg)
       f._pendingCastCreate = true
       return
     end
-    local btn = CreateFrame("Button", "SkyInfoTiles_KeystoneCast", f, "SecureActionButtonTemplate")
-    btn:SetPoint("TOPLEFT", f, "TOPLEFT", 8, -8)
+    local btn = CreateFrame("Button", "SkyInfoTiles_KeystoneCast", f.content, "SecureActionButtonTemplate")
+    btn:SetPoint("TOPLEFT", f.content, "TOPLEFT", 8, -8)
     btn:SetSize(ICON_SIZE, ICON_SIZE)
     btn:RegisterForClicks("AnyDown", "AnyUp")      -- left/right on down/up (covers keydown cvar)
     -- Avoid toggling EnableMouse on secure buttons to prevent taint; use Show/Hide only
     btn:SetAttribute("type", nil)
     btn:SetFrameStrata("HIGH")
     btn:SetToplevel(true)
-    btn:SetFrameLevel((f:GetFrameLevel() or 0) + 100)  -- ensure overlay is well above
+    btn:SetFrameLevel((f.content:GetFrameLevel() or 0) + 100)  -- ensure overlay is well above
     btn:SetScript("OnEnter", function(self)
       if not GameTooltip then return end
       GameTooltip:SetOwner(self, "ANCHOR_TOP")
@@ -543,6 +603,12 @@ function API.create(parent, cfg)
         local spellName = f.cast._pendingSpellName; f.cast._pendingSpellName = nil
         BindTeleportToButton(f.cast, spellName or nil)
       end
+      if f._pendingScale and f.content and f.content.SetScale then
+        local sc = f._pendingScale
+        f.content:SetScale(sc)
+        f._appliedScale = sc
+        f._pendingScale = nil
+      end
     end
     API.update(self, cfg)
   end)
@@ -557,8 +623,24 @@ function API.create(parent, cfg)
   f:SetScript("OnMouseUp", function(self, btn)
     if not (SkyInfoTilesDB and SkyInfoTilesDB.locked) and btn == "LeftButton" then
       if self.StopMovingOrSizing then self:StopMovingOrSizing() end
-      local point, _, _, x, y = self:GetPoint()
-      if self._cfg then self._cfg.point, self._cfg.x, self._cfg.y = point, x, y end
+      if self._cfg then
+        -- Always convert position to CENTER-based coordinates for consistency with sliders
+        local frameCenterX, frameCenterY = self:GetCenter()
+        if frameCenterX and frameCenterY and UIParent then
+          local screenCenterX, screenCenterY = UIParent:GetCenter()
+          if screenCenterX and screenCenterY then
+            local offsetX = frameCenterX - screenCenterX
+            local offsetY = frameCenterY - screenCenterY
+            self._cfg.point = "CENTER"
+            self._cfg.x = math.floor(offsetX + 0.5)
+            self._cfg.y = math.floor(offsetY + 0.5)
+            -- Update options window if it's open
+            if SkyInfoTiles._OptionsRefresh then
+              SkyInfoTiles._OptionsRefresh()
+            end
+          end
+        end
+      end
       return
     end
     if btn == "RightButton" then
@@ -648,6 +730,99 @@ function API.update(frame, cfg)
       if frame.Show then frame:Show() end
     end
   end
+
+  -- Apply scale (0.5 - 2.0) to content frame only (keeps wrapper position stable)
+  local sc = (cfg and tonumber(cfg.scale)) or 1
+  if sc < 0.5 then sc = 0.5 elseif sc > 2.0 then sc = 2.0 end
+  if frame.content and frame.content.SetScale then
+    if InCombatLockdown and InCombatLockdown() then
+      frame._pendingScale = sc
+    else
+      if frame._appliedScale ~= sc then
+        frame.content:SetScale(sc)
+        frame._appliedScale = sc
+        frame._pendingScale = nil
+      end
+    end
+  end
+
+  -- Apply background and border
+  local showBg = cfg and cfg.showBackground
+  local showBorder = cfg and cfg.showBorder
+  local useClassColor = cfg and cfg.useClassColor
+  local bg = (cfg and cfg.backgroundColor) or { r = 0, g = 0, b = 0, a = 0.8 }
+
+  -- Override with class color if enabled
+  if useClassColor then
+    local _, class = UnitClass("player")
+    if class then
+      local classColor = nil
+      -- Try modern API first (Retail 10.0+)
+      if C_ClassColor and C_ClassColor.GetClassColor then
+        classColor = C_ClassColor.GetClassColor(class)
+      end
+      -- Fallback to legacy globals
+      if not classColor then
+        classColor = (_G.RAID_CLASS_COLORS and _G.RAID_CLASS_COLORS[class]) or (_G.CUSTOM_CLASS_COLORS and _G.CUSTOM_CLASS_COLORS[class])
+      end
+      if classColor then
+        -- Keep alpha from saved settings, use RGB from class color
+        bg = { r = classColor.r, g = classColor.g, b = classColor.b, a = bg.a }
+      end
+    end
+  end
+
+  local border = (cfg and cfg.borderColor) or { r = 1, g = 1, b = 1, a = 1 }
+  local thickness = (cfg and cfg.borderThickness) or 2
+  if thickness < 1 then thickness = 1 elseif thickness > 10 then thickness = 10 end
+
+  -- Ensure backdrop frame exists and has correct stacking
+  if frame.backdrop then
+    -- Make sure backdrop is visible and behind other elements
+    frame.backdrop:Show()
+
+    -- ALWAYS use bgFile (never nil) - control visibility with alpha instead
+    -- IMPORTANT: Use WHITE8x8 (pure white texture) so SetBackdropColor works correctly
+    -- UI-Tooltip-Background is dark gray, which makes all colors look black
+    local backdropInfo = {
+      bgFile = "Interface\\Buttons\\WHITE8x8",
+      edgeFile = showBorder and "Interface\\Buttons\\WHITE8x8" or nil,
+      tile = false,
+      tileEdge = false,
+      edgeSize = showBorder and thickness or 1,
+      insets = { left = 0, right = 0, top = 0, bottom = 0 }
+    }
+
+    frame.backdrop:SetBackdrop(backdropInfo)
+
+    -- CRITICAL: Set colors IMMEDIATELY after SetBackdrop
+    -- WoW requires this order for colors to apply correctly
+    if showBg then
+      -- Force color application - must be called every update
+      frame.backdrop:SetBackdropColor(bg.r, bg.g, bg.b, bg.a)
+
+      -- Debug output (remove after testing)
+      if not frame._lastColorDebug or
+         (frame._lastColorDebug.r ~= bg.r or frame._lastColorDebug.g ~= bg.g or
+          frame._lastColorDebug.b ~= bg.b or frame._lastColorDebug.a ~= bg.a) then
+        frame._lastColorDebug = {r=bg.r, g=bg.g, b=bg.b, a=bg.a}
+        if DEFAULT_CHAT_FRAME and false then -- Set to true to enable debug
+          DEFAULT_CHAT_FRAME:AddMessage(string.format(
+            "|cff66ccffKeystone BG:|r r=%.2f g=%.2f b=%.2f a=%.2f",
+            bg.r, bg.g, bg.b, bg.a))
+        end
+      end
+    else
+      frame.backdrop:SetBackdropColor(0, 0, 0, 0)
+    end
+
+    if showBorder then
+      frame.backdrop:SetBackdropBorderColor(border.r, border.g, border.b, border.a)
+    else
+      frame.backdrop:SetBackdropBorderColor(0, 0, 0, 0)
+    end
+  end
+
   local info = Gather()
   if info then
     frame.icon:SetTexture(info.icon)
@@ -666,8 +841,8 @@ function API.update(frame, cfg)
     -- Use z-order to control interactivity; avoid Show/Hide to prevent taint
     if locked then
       if not (InCombatLockdown and InCombatLockdown()) then
-        frame.cast:SetFrameStrata(frame:GetFrameStrata() or "MEDIUM")
-        frame.cast:SetFrameLevel((frame:GetFrameLevel() or 0) + 100)
+        frame.cast:SetFrameStrata(frame.content:GetFrameStrata() or "MEDIUM")
+        frame.cast:SetFrameLevel((frame.content:GetFrameLevel() or 0) + 100)
       end
     else
       if not (InCombatLockdown and InCombatLockdown()) then
@@ -699,13 +874,22 @@ function API.update(frame, cfg)
 
 end
 
--- Chat command for debug
+-- Chat commands for debug
 SLASH_SKYKEYDEBUG1 = "/skykeydebug"
-SlashCmdList["SKYKEYDEBUG"] = function()
-  if SkyInfoTiles and SkyInfoTiles.DebugKeystoneTeleport then
-    SkyInfoTiles.DebugKeystoneTeleport()
+SlashCmdList["SKYKEYDEBUG"] = function(arg)
+  arg = arg and arg:lower():trim() or ""
+  if arg == "bg" or arg == "background" then
+    if SkyInfoTiles and SkyInfoTiles.DebugKeystoneBackground then
+      SkyInfoTiles.DebugKeystoneBackground()
+    else
+      DEFAULT_CHAT_FRAME:AddMessage("|cff66ccffSkyInfoTiles:|r Debug function not found.")
+    end
   else
-    DEFAULT_CHAT_FRAME:AddMessage("|cff66ccffSkyInfoTiles:|r Debug function not found.")
+    if SkyInfoTiles and SkyInfoTiles.DebugKeystoneTeleport then
+      SkyInfoTiles.DebugKeystoneTeleport()
+    else
+      DEFAULT_CHAT_FRAME:AddMessage("|cff66ccffSkyInfoTiles:|r Debug function not found.")
+    end
   end
 end
 
