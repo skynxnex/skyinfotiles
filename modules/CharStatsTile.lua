@@ -50,6 +50,10 @@ local HASTE_RATING_TOKEN = _G.CR_HASTE_MELEE or _G.CR_HASTE_SPELL or _G.CR_HASTE
 local MASTERY_TOKEN      = _G.CR_MASTERY
 local VERS_INC_TOKEN     = _G.CR_VERSATILITY_DAMAGE_DONE or _G.CR_VERSATILITY
 local VERS_RED_TOKEN     = _G.CR_VERSATILITY_DAMAGE_TAKEN
+-- Tertiary stats
+local LEECH_TOKEN        = _G.CR_LIFESTEAL or 36
+local AVOIDANCE_TOKEN    = _G.CR_AVOIDANCE or 37
+local SPEED_TOKEN        = _G.CR_SPEED or 38
 
 local function Safe_GetCombatRating(token)
   if token and type(_G.GetCombatRating) == "function" then
@@ -112,6 +116,14 @@ local function GatherStats()
 
   local versInc, versRed = Safe_GetVersatilityBonuses(versRating)
 
+  -- Tertiary stats
+  local leechRating = Safe_GetCombatRating(LEECH_TOKEN)
+  local leechPct = Safe_GetCombatRatingBonus(LEECH_TOKEN)
+  local avoidRating = Safe_GetCombatRating(AVOIDANCE_TOKEN)
+  local avoidPct = Safe_GetCombatRatingBonus(AVOIDANCE_TOKEN)
+  local speedRating = Safe_GetCombatRating(SPEED_TOKEN)
+  local speedPct = Safe_GetCombatRatingBonus(SPEED_TOKEN)
+
   return {
     ilvl = ilvl,
     primaryName = primaryName,
@@ -120,6 +132,9 @@ local function GatherStats()
     haste = { rating = math.floor(hasteRating + 0.5), pct = hastePct },
     mast  = { rating = math.floor(mastRating  + 0.5), pct = mastPct  },
     vers  = { rating = math.floor(versRating  + 0.5), inc = versInc, red = versRed },
+    leech = { rating = math.floor(leechRating + 0.5), pct = leechPct },
+    avoid = { rating = math.floor(avoidRating + 0.5), pct = avoidPct },
+    speed = { rating = math.floor(speedRating + 0.5), pct = speedPct },
   }
 end
 
@@ -133,8 +148,12 @@ function API.create(parent, cfg)
   local titleSize = tonumber(cfg.titleSize) or 14
   local lineSize = tonumber(cfg.lineSize) or 12
   local hideTitle = cfg.hideTitle or false
+  local showTertiary = cfg.showTertiary
+  if showTertiary == nil then showTertiary = false end
 
-  local rows   = hideTitle and 6 or 7  -- 6 lines, or 1 title + 6 lines
+  local rows = 6  -- base stats
+  if showTertiary then rows = rows + 4 end  -- +3 tertiary stats + 1 for divider spacing
+  if not hideTitle then rows = rows + 1 end  -- +1 for title
   local height = PAD_Y * 2 + rows * ROW_HEIGHT + 6
   local width  = 360
   f:SetSize(width, height)
@@ -174,6 +193,27 @@ function API.create(parent, cfg)
   f.line4 = makeLine(f.line3)     -- Haste
   f.line5 = makeLine(f.line4)     -- Mastery
   f.line6 = makeLine(f.line5)     -- Versatility
+
+  -- Divider (horizontal line separator)
+  f.divider = f:CreateTexture(nil, "OVERLAY")
+  f.divider:SetTexture("Interface\\Buttons\\WHITE8x8")
+  f.divider:SetColorTexture(0.4, 0.4, 0.4, 0.5)
+  f.divider:SetHeight(1)
+  f.divider:SetPoint("TOPLEFT", f.line6, "BOTTOMLEFT", 0, -8)
+  f.divider:SetPoint("TOPRIGHT", f.line6, "BOTTOMRIGHT", 0, -8)
+  if not showTertiary then
+    f.divider:Hide()
+  end
+
+  -- Tertiary stats (hidden by default)
+  f.line7 = makeLine(f.divider, -6)     -- Leech
+  f.line8 = makeLine(f.line7)           -- Avoidance
+  f.line9 = makeLine(f.line8)           -- Speed
+  if not showTertiary then
+    f.line7:Hide()
+    f.line8:Hide()
+    f.line9:Hide()
+  end
 
   -- Right-click refresh
   f:EnableMouse(true)
@@ -221,6 +261,8 @@ function API.update(frame, cfg)
   local titleSize = tonumber(cfg.titleSize) or 14
   local lineSize = tonumber(cfg.lineSize) or 12
   local hideTitle = cfg.hideTitle or false
+  local showTertiary = cfg.showTertiary
+  if showTertiary == nil then showTertiary = false end
 
   -- Apply title size and visibility
   if frame.title then
@@ -233,11 +275,30 @@ function API.update(frame, cfg)
   end
 
   -- Apply line size
-  local lineFrames = { frame.line1, frame.line2, frame.line3, frame.line4, frame.line5, frame.line6 }
+  local lineFrames = { frame.line1, frame.line2, frame.line3, frame.line4, frame.line5, frame.line6, frame.line7, frame.line8, frame.line9 }
   for _, fs in ipairs(lineFrames) do
     if fs then
       UI.Outline(fs, { size = lineSize })
     end
+  end
+
+  -- Show/hide tertiary stats and divider
+  if frame.divider then
+    if showTertiary then
+      frame.divider:Show()
+    else
+      frame.divider:Hide()
+    end
+  end
+
+  if frame.line7 then
+    if showTertiary then frame.line7:Show() else frame.line7:Hide() end
+  end
+  if frame.line8 then
+    if showTertiary then frame.line8:Show() else frame.line8:Hide() end
+  end
+  if frame.line9 then
+    if showTertiary then frame.line9:Show() else frame.line9:Hide() end
   end
 
   -- Reposition first line based on title visibility
@@ -250,10 +311,57 @@ function API.update(frame, cfg)
     end
   end
 
-  -- Update frame height based on title visibility
-  local rows = hideTitle and 6 or 7
-  local height = PAD_Y * 2 + rows * ROW_HEIGHT + 6
-  frame:SetSize(360, height)
+  -- Update frame height based on title and tertiary visibility
+  local rows = 6  -- base stats
+  if showTertiary then rows = rows + 4 end  -- +3 tertiary stats + 1 for divider spacing
+  if not hideTitle then rows = rows + 1 end  -- +1 for title
+  local newHeight = PAD_Y * 2 + rows * ROW_HEIGHT + 6
+
+  -- Adjust position to keep top in same place when showTertiary setting changes
+  if frame._cfg then
+    -- Check if showTertiary state changed (not just height)
+    local lastShowTertiary = frame._cfg._lastShowTertiary
+    if lastShowTertiary ~= showTertiary then
+      -- Convert to CENTER coordinates if not already
+      if not frame._cfg.point or frame._cfg.point ~= "CENTER" then
+        local frameCenterX, frameCenterY = frame:GetCenter()
+        if frameCenterX and frameCenterY then
+          local screenCenterX, screenCenterY = UIParent:GetCenter()
+          if screenCenterX and screenCenterY then
+            frame._cfg.x = math.floor(frameCenterX - screenCenterX + 0.5)
+            frame._cfg.y = math.floor(frameCenterY - screenCenterY + 0.5)
+            frame._cfg.point = "CENTER"
+          end
+        end
+      end
+
+      -- Calculate old and new heights based on showTertiary setting
+      local oldRows = 6
+      if lastShowTertiary then oldRows = oldRows + 4 end
+      if not hideTitle then oldRows = oldRows + 1 end
+      local oldHeight = PAD_Y * 2 + oldRows * ROW_HEIGHT + 6
+
+      if lastShowTertiary ~= nil then  -- Skip on first run
+        local currentCenterY = frame._cfg.y or 0
+        -- Calculate where the top currently is (based on OLD height)
+        local currentTopY = currentCenterY + (oldHeight / 2)
+        -- Calculate new center Y to keep top at the same position
+        local newCenterY = currentTopY - (newHeight / 2)
+        frame._cfg.y = math.floor(newCenterY + 0.5)
+
+        -- Update actual position
+        if not (InCombatLockdown and InCombatLockdown()) then
+          frame:ClearAllPoints()
+          frame:SetPoint("CENTER", UIParent, "CENTER", frame._cfg.x or 0, frame._cfg.y)
+        end
+      end
+
+      -- Remember current state
+      frame._cfg._lastShowTertiary = showTertiary
+    end
+  end
+
+  frame:SetSize(360, newHeight)
 
   local ok, S_or_err = pcall(GatherStats)
   if not ok or not S_or_err then
@@ -263,12 +371,22 @@ function API.update(frame, cfg)
     frame.line4:SetText("Haste: –")
     frame.line5:SetText("Mastery: –")
     frame.line6:SetText("Versatility: –")
+    frame.line7:SetText("Leech: –")
+    frame.line8:SetText("Avoidance: –")
+    frame.line9:SetText("Speed: –")
     return
   end
   local S = S_or_err
 
   -- Determine desired order (saved in cfg.order) with sane defaults and validation
-  local DEFAULT_ORDER = { "ilvl", "primary", "crit", "haste", "mastery", "versatility" }
+  local DEFAULT_ORDER_BASE = { "ilvl", "primary", "crit", "haste", "mastery", "versatility" }
+  local DEFAULT_ORDER_TERTIARY = { "leech", "avoidance", "speed" }
+  local DEFAULT_ORDER = {}
+  for _, k in ipairs(DEFAULT_ORDER_BASE) do table.insert(DEFAULT_ORDER, k) end
+  if showTertiary then
+    for _, k in ipairs(DEFAULT_ORDER_TERTIARY) do table.insert(DEFAULT_ORDER, k) end
+  end
+
   local VALID = {}
   for _, k in ipairs(DEFAULT_ORDER) do VALID[k] = true end
   local function contains(t, v) for _, x in ipairs(t) do if x == v then return true end end return false end
@@ -292,6 +410,9 @@ function API.update(frame, cfg)
     crit         = ("Crit: %s - %d"):format(        pctComma(S.crit.pct),  S.crit.rating),
     versatility  = ("Vers: %s - %d"):format(        pctComma(S.vers.inc),  S.vers.rating),
     mastery      = ("Mastery: %s - %d"):format(     pctComma(S.mast.pct),  S.mast.rating),
+    leech        = ("Leech: %s - %d"):format(       pctComma(S.leech.pct), S.leech.rating),
+    avoidance    = ("Avoidance: %s - %d"):format(   pctComma(S.avoid.pct), S.avoid.rating),
+    speed        = ("Speed: %s - %d"):format(       pctComma(S.speed.pct), S.speed.rating),
   }
   local colorsByKey = {
     ilvl        = { 1.0, 1.0, 1.0 },
@@ -300,10 +421,13 @@ function API.update(frame, cfg)
     crit        = { 1.00, 0.20, 0.20 },
     versatility = { 0.20, 0.60, 1.00 },
     mastery     = { 1.00, 0.82, 0.00 },
+    leech       = { 0.80, 0.20, 0.80 }, -- purple
+    avoidance   = { 1.00, 0.60, 0.20 }, -- orange
+    speed       = { 0.40, 1.00, 0.80 }, -- cyan/teal
   }
 
   -- Assign lines according to order (and apply per-line colors)
-  local lines = { frame.line1, frame.line2, frame.line3, frame.line4, frame.line5, frame.line6 }
+  local lines = { frame.line1, frame.line2, frame.line3, frame.line4, frame.line5, frame.line6, frame.line7, frame.line8, frame.line9 }
   for i = 1, #lines do
     local key = order[i] or DEFAULT_ORDER[i]
     local fs = lines[i]

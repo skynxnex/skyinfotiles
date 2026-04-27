@@ -60,10 +60,17 @@ local function CreatePositionSliders(parent, tileKey, tileType, yOffset)
     self:ClearFocus()
   end)
 
+  xPosSlider._programmaticChange = false
   xPosSlider:SetScript("OnValueChanged", function(self, value)
     local rounded = math.floor(value)
     _G[self:GetName() .. "Text"]:SetText(tostring(rounded))
     xPosEditBox:SetText(tostring(rounded))
+
+    -- Don't rebuild if this is a programmatic change from RefreshOptionsWindow
+    if self._programmaticChange then
+      return
+    end
+
     if SkyInfoTiles.GetActiveTiles then
       local tiles = SkyInfoTiles.GetActiveTiles()
       for _, tile in ipairs(tiles) do
@@ -133,10 +140,17 @@ local function CreatePositionSliders(parent, tileKey, tileType, yOffset)
     self:ClearFocus()
   end)
 
+  yPosSlider._programmaticChange = false
   yPosSlider:SetScript("OnValueChanged", function(self, value)
     local rounded = math.floor(value)
     _G[self:GetName() .. "Text"]:SetText(tostring(rounded))
     yPosEditBox:SetText(tostring(rounded))
+
+    -- Don't rebuild if this is a programmatic change from RefreshOptionsWindow
+    if self._programmaticChange then
+      return
+    end
+
     if SkyInfoTiles.GetActiveTiles then
       local tiles = SkyInfoTiles.GetActiveTiles()
       for _, tile in ipairs(tiles) do
@@ -427,7 +441,11 @@ local function CreateOptionsWindow()
   enableCurrencyCheck:SetPoint("TOPLEFT", 10, -10)
   enableCurrencyCheck.Text:SetText("Enable Currency Tile")
   enableCurrencyCheck.Text:SetTextColor(1, 0.82, 0, 1) -- Gold color
+  enableCurrencyCheck._programmaticChange = false
   enableCurrencyCheck:SetScript("OnClick", function(self)
+    if self._programmaticChange then
+      return
+    end
     local enabled = self:GetChecked()
     if SkyInfoTiles.SetTileEnabledByKey then
       SkyInfoTiles.SetTileEnabledByKey("currencies", enabled)
@@ -435,12 +453,32 @@ local function CreateOptionsWindow()
   end)
   currencyTab.enableCheck = enableCurrencyCheck
 
-  -- Hide Labels checkbox
-  local hideLabelCheck = CreateFrame("CheckButton", nil, currencyTab, "UICheckButtonTemplate")
-  hideLabelCheck:SetPoint("LEFT", enableCurrencyCheck, "RIGHT", 200, 0)
+  -- Scroll frame for currencies
+  local scrollFrame = CreateFrame("ScrollFrame", nil, currencyTab, "UIPanelScrollFrameTemplate")
+  scrollFrame:SetPoint("TOPLEFT", 5, -40)
+  scrollFrame:SetPoint("BOTTOMRIGHT", -25, 45) -- 45px space for buttons at bottom
+
+  local scrollChild = CreateFrame("Frame", nil, scrollFrame)
+  scrollChild:SetSize(580, 1) -- Height set dynamically
+  scrollFrame:SetScrollChild(scrollChild)
+
+  currencyTab.scrollFrame = scrollFrame
+  currencyTab.scrollChild = scrollChild
+
+  local yOffsetCurr = -10
+
+  -- Hide Labels checkbox - inside scroll
+  local hideLabelCheck = CreateFrame("CheckButton", nil, scrollChild, "UICheckButtonTemplate")
+  hideLabelCheck:SetPoint("TOPLEFT", 10, yOffsetCurr)
   hideLabelCheck.Text:SetText("Hide Labels (show only numbers)")
   hideLabelCheck.Text:SetTextColor(1, 0.82, 0, 1)
+  hideLabelCheck._programmaticChange = false
   hideLabelCheck:SetScript("OnClick", function(self)
+    -- Skip rebuild if this is a programmatic change
+    if self._programmaticChange then
+      return
+    end
+
     local hideLabel = self:GetChecked()
     if SkyInfoTiles.GetActiveTiles then
       local tiles = SkyInfoTiles.GetActiveTiles()
@@ -457,34 +495,27 @@ local function CreateOptionsWindow()
     end
   end)
   currencyTab.hideLabelCheck = hideLabelCheck
+  yOffsetCurr = yOffsetCurr - 30
 
-  -- Position sliders (X and Y)
-  local yOffsetCurr = -50
-  local currencyPosSliders = CreatePositionSliders(currencyTab, "currencies", "currencies", yOffsetCurr)
+  -- Position sliders (X and Y) - inside scroll
+  local currencyPosSliders = CreatePositionSliders(scrollChild, "currencies", "currencies", yOffsetCurr)
   currencyTab.xPosSlider = currencyPosSliders.xPosSlider
   currencyTab.xPosEditBox = currencyPosSliders.xPosEditBox
   currencyTab.yPosSlider = currencyPosSliders.yPosSlider
   currencyTab.yPosEditBox = currencyPosSliders.yPosEditBox
   yOffsetCurr = currencyPosSliders.newYOffset
 
-  -- Scroll frame for currencies (leave space for position sliders and buttons)
-  local scrollFrame = CreateFrame("ScrollFrame", nil, currencyTab, "UIPanelScrollFrameTemplate")
-  scrollFrame:SetPoint("TOPLEFT", 5, yOffsetCurr) -- Start below position sliders
-  scrollFrame:SetPoint("BOTTOMRIGHT", -25, 45) -- 45px space for buttons at bottom
-
-  local scrollChild = CreateFrame("Frame", nil, scrollFrame)
-  scrollChild:SetSize(580, 1) -- Height set dynamically
-  scrollFrame:SetScrollChild(scrollChild)
-
-  currencyTab.scrollFrame = scrollFrame
-  currencyTab.scrollChild = scrollChild
+  yOffsetCurr = yOffsetCurr - 20
+  currencyTab._currencyListStartY = yOffsetCurr  -- Save for PopulateCurrencies
 
   -- Function to populate currency checkboxes
   local function PopulateCurrencies()
-    -- Clear existing
+    -- Clear existing currency checkboxes (but keep hideLabelCheck and position sliders)
     for _, child in ipairs({scrollChild:GetChildren()}) do
-      child:Hide()
-      child:SetParent(nil)
+      if child._isCurrencyCheck then
+        child:Hide()
+        child:SetParent(nil)
+      end
     end
 
     if not SkyInfoTilesDB.currencySettings then
@@ -493,7 +524,7 @@ local function CreateOptionsWindow()
 
     local CURRENCIES = SkyInfoTiles.GetCurrencyList and SkyInfoTiles.GetCurrencyList() or {}
 
-    local y = -10
+    local y = currencyTab._currencyListStartY or -10
     local function CreateCurrencyCheck(entry, index)
       if entry.separator then
         -- Separator line
@@ -501,6 +532,7 @@ local function CreateOptionsWindow()
         line:SetColorTexture(0.5, 0.5, 0.5, 0.6)
         line:SetSize(550, 2)
         line:SetPoint("TOPLEFT", 10, y - 10)
+        line._isCurrencyCheck = true
         y = y - 25
         return
       end
@@ -508,6 +540,7 @@ local function CreateOptionsWindow()
       local cb = CreateFrame("CheckButton", nil, scrollChild, "UICheckButtonTemplate")
       cb:SetPoint("TOPLEFT", 10, y)
       cb.Text:SetText(entry.label or ("Currency " .. entry.id))
+      cb._isCurrencyCheck = true
 
       -- Load saved state (default = true for all)
       local enabled = SkyInfoTilesDB.currencySettings[entry.id]
@@ -515,8 +548,11 @@ local function CreateOptionsWindow()
         enabled = true
         SkyInfoTilesDB.currencySettings[entry.id] = true
       end
+
+      -- Set checked state BEFORE adding OnClick to prevent triggering refresh
       cb:SetChecked(enabled)
 
+      -- Add OnClick handler AFTER setting initial state
       cb:SetScript("OnClick", function(self)
         SkyInfoTilesDB.currencySettings[entry.id] = self:GetChecked()
         -- Refresh currency tile
@@ -582,6 +618,9 @@ local function CreateOptionsWindow()
     end
   end)
 
+  -- Initial populate (only happens once when tab is created)
+  PopulateCurrencies()
+
   -- === TAB 3: KEYSTONE (with full settings) ===
   local keystoneTab = CreateFrame("Frame", nil, contentArea)
   keystoneTab:SetAllPoints()
@@ -593,7 +632,9 @@ local function CreateOptionsWindow()
   keystoneEnableCheck:SetPoint("TOPLEFT", 10, -10)
   keystoneEnableCheck.Text:SetText("Enable Mythic Keystone")
   keystoneEnableCheck.Text:SetTextColor(1, 0.82, 0, 1)
+  keystoneEnableCheck._programmaticChange = false
   keystoneEnableCheck:SetScript("OnClick", function(self)
+    if self._programmaticChange then return end
     local enabled = self:GetChecked()
     if SkyInfoTiles.SetTileEnabledByKey then
       SkyInfoTiles.SetTileEnabledByKey("keystone", enabled)
@@ -811,7 +852,9 @@ local function CreateOptionsWindow()
   local bgEnableCheck = CreateFrame("CheckButton", nil, scrollChild, "UICheckButtonTemplate")
   bgEnableCheck:SetPoint("TOPLEFT", bgLabel, "BOTTOMLEFT", 0, -10)
   bgEnableCheck.Text:SetText("Show Background")
+  bgEnableCheck._programmaticChange = false
   bgEnableCheck:SetScript("OnClick", function(self)
+    if self._programmaticChange then return end
     local enabled = self:GetChecked()
     if SkyInfoTiles.GetActiveTiles then
       local tiles = SkyInfoTiles.GetActiveTiles()
@@ -832,7 +875,9 @@ local function CreateOptionsWindow()
   local useClassColorCheck = CreateFrame("CheckButton", nil, scrollChild, "UICheckButtonTemplate")
   useClassColorCheck:SetPoint("TOPLEFT", bgEnableCheck, "BOTTOMLEFT", 20, -10)
   useClassColorCheck.Text:SetText("Use Class Color")
+  useClassColorCheck._programmaticChange = false
   useClassColorCheck:SetScript("OnClick", function(self)
+    if self._programmaticChange then return end
     local enabled = self:GetChecked()
     if SkyInfoTiles.GetActiveTiles then
       local tiles = SkyInfoTiles.GetActiveTiles()
@@ -993,7 +1038,9 @@ local function CreateOptionsWindow()
   local borderEnableCheck = CreateFrame("CheckButton", nil, scrollChild, "UICheckButtonTemplate")
   borderEnableCheck:SetPoint("TOPLEFT", borderLabel, "BOTTOMLEFT", 0, -10)
   borderEnableCheck.Text:SetText("Show Border")
+  borderEnableCheck._programmaticChange = false
   borderEnableCheck:SetScript("OnClick", function(self)
+    if self._programmaticChange then return end
     local enabled = self:GetChecked()
     if SkyInfoTiles.GetActiveTiles then
       local tiles = SkyInfoTiles.GetActiveTiles()
@@ -1174,7 +1221,9 @@ local function CreateOptionsWindow()
   charStatsEnableCheck:SetPoint("TOPLEFT", 10, -10)
   charStatsEnableCheck.Text:SetText("Enable Character Stats")
   charStatsEnableCheck.Text:SetTextColor(1, 0.82, 0, 1)
+  charStatsEnableCheck._programmaticChange = false
   charStatsEnableCheck:SetScript("OnClick", function(self)
+    if self._programmaticChange then return end
     local enabled = self:GetChecked()
     if SkyInfoTiles.SetTileEnabledByKey then
       SkyInfoTiles.SetTileEnabledByKey("charstats", enabled)
@@ -1182,32 +1231,38 @@ local function CreateOptionsWindow()
   end)
   charStatsTab.enableCheck = charStatsEnableCheck
 
-  -- Position sliders (X and Y)
-  local yOffsetChar = -50
-  local charStatsPosSliders = CreatePositionSliders(charStatsTab, "charstats", "charstats", yOffsetChar)
+  -- Scroll frame for settings
+  local scrollFrame = CreateFrame("ScrollFrame", nil, charStatsTab, "UIPanelScrollFrameTemplate")
+  scrollFrame:SetPoint("TOPLEFT", 5, -40)
+  scrollFrame:SetPoint("BOTTOMRIGHT", -25, 10)
+
+  local scrollChild = CreateFrame("Frame", nil, scrollFrame)
+  scrollChild:SetSize(580, 900) -- Height will accommodate all controls
+  scrollFrame:SetScrollChild(scrollChild)
+
+  charStatsTab.scrollFrame = scrollFrame
+  charStatsTab.scrollChild = scrollChild
+
+  local yOffsetChar = -10
+
+  -- Position sliders (X and Y) - inside scroll
+  local charStatsPosSliders = CreatePositionSliders(scrollChild, "charstats", "charstats", yOffsetChar)
   charStatsTab.xPosSlider = charStatsPosSliders.xPosSlider
   charStatsTab.xPosEditBox = charStatsPosSliders.xPosEditBox
   charStatsTab.yPosSlider = charStatsPosSliders.yPosSlider
   charStatsTab.yPosEditBox = charStatsPosSliders.yPosEditBox
   yOffsetChar = charStatsPosSliders.newYOffset
 
-  -- Scroll frame for settings
-  local scrollFrame = CreateFrame("ScrollFrame", nil, charStatsTab, "UIPanelScrollFrameTemplate")
-  scrollFrame:SetPoint("TOPLEFT", 5, yOffsetChar) -- Start below position sliders
-  scrollFrame:SetPoint("BOTTOMRIGHT", -25, 10)
-
-  local scrollChild = CreateFrame("Frame", nil, scrollFrame)
-  scrollChild:SetSize(580, 550) -- Height will accommodate all controls
-  scrollFrame:SetScrollChild(scrollChild)
-
-  charStatsTab.scrollFrame = scrollFrame
-  charStatsTab.scrollChild = scrollChild
+  yOffsetChar = yOffsetChar - 20
 
   -- Description
   local desc = scrollChild:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-  desc:SetPoint("TOPLEFT", 10, -10)
+  desc:SetPoint("TOPLEFT", 10, yOffsetChar)
   desc:SetTextColor(0.7, 0.7, 0.7, 1)
   desc:SetText("Customize the order of stats displayed:")
+
+  yOffsetChar = yOffsetChar - 25
+  charStatsTab._statListStartY = yOffsetChar  -- Save for RebuildStatList
 
   -- Stat order list
   local STAT_LABELS = {
@@ -1262,7 +1317,7 @@ local function CreateOptionsWindow()
     statRows = {}
 
     local order = GetCurrentOrder()
-    local yOffset = -40
+    local yOffset = charStatsTab._statListStartY or -40
 
     for i, statKey in ipairs(order) do
       local row = CreateFrame("Frame", nil, scrollChild)
@@ -1327,13 +1382,16 @@ local function CreateOptionsWindow()
       scrollChild.resetBtn:ClearAllPoints()
       scrollChild.resetBtn:SetPoint("TOPLEFT", 10, yOffset - 10)
     end
+
+    -- Save end position for font controls
+    charStatsTab._fontControlsY = yOffset - 50
   end
 
   charStatsTab.RebuildStatList = RebuildStatList
   RebuildStatList()
 
   -- Font size controls (positioned below reset button)
-  local fontControlsY = -330 -- Positioned below stat list and reset button
+  local fontControlsY = charStatsTab._fontControlsY or -330
 
   -- Hide title checkbox
   local hideTitleCheck = CreateFrame("CheckButton", nil, scrollChild, "UICheckButtonTemplate")
@@ -1358,9 +1416,32 @@ local function CreateOptionsWindow()
   end)
   charStatsTab.hideTitleCheck = hideTitleCheck
 
+  -- Show Tertiary Stats checkbox
+  local showTertiaryCheck = CreateFrame("CheckButton", nil, scrollChild, "UICheckButtonTemplate")
+  showTertiaryCheck:SetPoint("TOPLEFT", hideTitleCheck, "BOTTOMLEFT", 0, -5)
+  showTertiaryCheck.Text:SetText("Show Tertiary Stats (Leech, Avoidance, Speed)")
+  showTertiaryCheck.Text:SetTextColor(1, 0.82, 0, 1)
+  showTertiaryCheck:SetScript("OnClick", function(self)
+    local showTertiary = self:GetChecked()
+    if SkyInfoTiles.GetActiveTiles then
+      local tiles = SkyInfoTiles.GetActiveTiles()
+      for _, tile in ipairs(tiles) do
+        if tile.key == "charstats" or tile.type == "charstats" then
+          tile.showTertiary = showTertiary
+          if SkyInfoTiles.Rebuild and SkyInfoTiles.UpdateAll then
+            SkyInfoTiles.Rebuild()
+            SkyInfoTiles.UpdateAll()
+          end
+          break
+        end
+      end
+    end
+  end)
+  charStatsTab.showTertiaryCheck = showTertiaryCheck
+
   -- Title size slider label
   local titleSizeLabel = scrollChild:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-  titleSizeLabel:SetPoint("TOPLEFT", 10, fontControlsY - 35)
+  titleSizeLabel:SetPoint("TOPLEFT", 10, fontControlsY - 90)
   titleSizeLabel:SetText("Title Size:")
   titleSizeLabel:SetTextColor(1, 0.82, 0, 1)
 
@@ -1449,7 +1530,9 @@ local function CreateOptionsWindow()
   crosshairEnableCheck:SetPoint("TOPLEFT", 10, -10)
   crosshairEnableCheck.Text:SetText("Enable Crosshair")
   crosshairEnableCheck.Text:SetTextColor(1, 0.82, 0, 1)
+  crosshairEnableCheck._programmaticChange = false
   crosshairEnableCheck:SetScript("OnClick", function(self)
+    if self._programmaticChange then return end
     local enabled = self:GetChecked()
     if SkyInfoTiles.SetTileEnabledByKey then
       SkyInfoTiles.SetTileEnabledByKey("crosshair", enabled)
@@ -1847,7 +1930,9 @@ local function CreateOptionsWindow()
   clockEnableCheck:SetPoint("TOPLEFT", 10, -10)
   clockEnableCheck.Text:SetText("Enable 24h Clock")
   clockEnableCheck.Text:SetTextColor(1, 0.82, 0, 1)
+  clockEnableCheck._programmaticChange = false
   clockEnableCheck:SetScript("OnClick", function(self)
+    if self._programmaticChange then return end
     local enabled = self:GetChecked()
     if SkyInfoTiles.SetTileEnabledByKey then
       SkyInfoTiles.SetTileEnabledByKey("clock", enabled)
@@ -2080,7 +2165,9 @@ local function CreateOptionsWindow()
   dungeonEnableCheck:SetPoint("TOPLEFT", 10, -10)
   dungeonEnableCheck.Text:SetText("Enable Dungeon Teleports")
   dungeonEnableCheck.Text:SetTextColor(1, 0.82, 0, 1)
+  dungeonEnableCheck._programmaticChange = false
   dungeonEnableCheck:SetScript("OnClick", function(self)
+    if self._programmaticChange then return end
     local enabled = self:GetChecked()
     if SkyInfoTiles.SetTileEnabledByKey then
       SkyInfoTiles.SetTileEnabledByKey("dungeonports", enabled)
@@ -2167,12 +2254,7 @@ local function RefreshOptionsWindow()
     f.tabContent[1].lockCheck:SetChecked(SkyInfoTilesDB.locked or false)
   end
 
-  -- Refresh currency tab
-  if f.tabContent and f.tabContent[2] and f.tabContent[2].Populate then
-    f.tabContent[2].Populate()
-  end
-
-  -- Refresh hide label checkbox for currencies
+  -- Refresh hide label checkbox for currencies (skip Populate to avoid triggering tile refresh)
   if f.tabContent and f.tabContent[2] and f.tabContent[2].hideLabelCheck then
     local hideLabel = false
     if SkyInfoTiles.GetActiveTiles then
@@ -2184,7 +2266,9 @@ local function RefreshOptionsWindow()
         end
       end
     end
+    f.tabContent[2].hideLabelCheck._programmaticChange = true
     f.tabContent[2].hideLabelCheck:SetChecked(hideLabel)
+    f.tabContent[2].hideLabelCheck._programmaticChange = false
   end
 
   -- Refresh all tile enable checkboxes
@@ -2209,7 +2293,10 @@ local function RefreshOptionsWindow()
           end
         end
       end
-      f.tabContent[tabIndex].enableCheck:SetChecked(enabled)
+      local checkbox = f.tabContent[tabIndex].enableCheck
+      checkbox._programmaticChange = true
+      checkbox:SetChecked(enabled)
+      checkbox._programmaticChange = false
     end
   end
 
@@ -2254,14 +2341,18 @@ local function RefreshOptionsWindow()
       _G[keystoneTab.scaleSlider:GetName() .. "Text"]:SetText(string.format("%.0f%%", scale * 100))
     end
     if keystoneTab.xPosSlider then
+      keystoneTab.xPosSlider._programmaticChange = true
       keystoneTab.xPosSlider:SetValue(xPos)
+      keystoneTab.xPosSlider._programmaticChange = false
       _G[keystoneTab.xPosSlider:GetName() .. "Text"]:SetText(tostring(math.floor(xPos)))
     end
     if keystoneTab.xPosEditBox then
       keystoneTab.xPosEditBox:SetText(tostring(math.floor(xPos)))
     end
     if keystoneTab.yPosSlider then
+      keystoneTab.yPosSlider._programmaticChange = true
       keystoneTab.yPosSlider:SetValue(yPos)
+      keystoneTab.yPosSlider._programmaticChange = false
       _G[keystoneTab.yPosSlider:GetName() .. "Text"]:SetText(tostring(math.floor(yPos)))
     end
     if keystoneTab.yPosEditBox then
@@ -2329,14 +2420,18 @@ local function RefreshOptionsWindow()
       end
 
       if tab.xPosSlider then
+        tab.xPosSlider._programmaticChange = true
         tab.xPosSlider:SetValue(xPos)
+        tab.xPosSlider._programmaticChange = false
         _G[tab.xPosSlider:GetName() .. "Text"]:SetText(tostring(math.floor(xPos)))
       end
       if tab.xPosEditBox then
         tab.xPosEditBox:SetText(tostring(math.floor(xPos)))
       end
       if tab.yPosSlider then
+        tab.yPosSlider._programmaticChange = true
         tab.yPosSlider:SetValue(yPos)
+        tab.yPosSlider._programmaticChange = false
         _G[tab.yPosSlider:GetName() .. "Text"]:SetText(tostring(math.floor(yPos)))
       end
       if tab.yPosEditBox then
@@ -2355,11 +2450,7 @@ function SkyInfoTiles.ToggleOptionsWindow()
   if f:IsShown() then
     f:Hide()
   else
-    -- Refresh currency tab when opening
-    if f.tabContent and f.tabContent[2] and f.tabContent[2].Populate then
-      f.tabContent[2].Populate()
-    end
-    -- Refresh hide label checkbox for currencies
+    -- Refresh hide label checkbox for currencies (but don't repopulate currency list)
     if f.tabContent and f.tabContent[2] and f.tabContent[2].hideLabelCheck then
       local hideLabel = false
       if SkyInfoTiles.GetActiveTiles then
@@ -2371,7 +2462,9 @@ function SkyInfoTiles.ToggleOptionsWindow()
           end
         end
       end
+      f.tabContent[2].hideLabelCheck._programmaticChange = true
       f.tabContent[2].hideLabelCheck:SetChecked(hideLabel)
+      f.tabContent[2].hideLabelCheck._programmaticChange = false
     end
     -- Refresh general tab checkboxes
     if f.tabContent and f.tabContent[1] and f.tabContent[1].lockCheck then
@@ -2399,7 +2492,10 @@ function SkyInfoTiles.ToggleOptionsWindow()
             end
           end
         end
-        f.tabContent[tabIndex].enableCheck:SetChecked(enabled)
+        local checkbox = f.tabContent[tabIndex].enableCheck
+        checkbox._programmaticChange = true
+        checkbox:SetChecked(enabled)
+        checkbox._programmaticChange = false
       end
     end
 
@@ -2439,24 +2535,32 @@ function SkyInfoTiles.ToggleOptionsWindow()
         _G[keystoneTab.scaleSlider:GetName() .. "Text"]:SetText(string.format("%.0f%%", scale * 100))
       end
       if keystoneTab.xPosSlider then
+        keystoneTab.xPosSlider._programmaticChange = true
         keystoneTab.xPosSlider:SetValue(xPos)
+        keystoneTab.xPosSlider._programmaticChange = false
         _G[keystoneTab.xPosSlider:GetName() .. "Text"]:SetText(tostring(math.floor(xPos)))
       end
       if keystoneTab.xPosEditBox then
         keystoneTab.xPosEditBox:SetText(tostring(math.floor(xPos)))
       end
       if keystoneTab.yPosSlider then
+        keystoneTab.yPosSlider._programmaticChange = true
         keystoneTab.yPosSlider:SetValue(yPos)
+        keystoneTab.yPosSlider._programmaticChange = false
         _G[keystoneTab.yPosSlider:GetName() .. "Text"]:SetText(tostring(math.floor(yPos)))
       end
       if keystoneTab.yPosEditBox then
         keystoneTab.yPosEditBox:SetText(tostring(math.floor(yPos)))
       end
       if keystoneTab.bgEnableCheck then
+        keystoneTab.bgEnableCheck._programmaticChange = true
         keystoneTab.bgEnableCheck:SetChecked(showBackground)
+        keystoneTab.bgEnableCheck._programmaticChange = false
       end
       if keystoneTab.useClassColorCheck then
+        keystoneTab.useClassColorCheck._programmaticChange = true
         keystoneTab.useClassColorCheck:SetChecked(useClassColor)
+        keystoneTab.useClassColorCheck._programmaticChange = false
       end
       if keystoneTab.bgColorSwatch then
         keystoneTab.bgColorSwatch:SetColorTexture(backgroundColor.r, backgroundColor.g, backgroundColor.b, backgroundColor.a)
@@ -2477,7 +2581,9 @@ function SkyInfoTiles.ToggleOptionsWindow()
         end
       end
       if keystoneTab.borderEnableCheck then
+        keystoneTab.borderEnableCheck._programmaticChange = true
         keystoneTab.borderEnableCheck:SetChecked(showBorder)
+        keystoneTab.borderEnableCheck._programmaticChange = false
       end
       if keystoneTab.borderColorSwatch then
         keystoneTab.borderColorSwatch:SetColorTexture(borderColor.r, borderColor.g, borderColor.b, borderColor.a)
@@ -2594,6 +2700,7 @@ function SkyInfoTiles.ToggleOptionsWindow()
 
       -- Refresh font settings
       local hideTitle = false
+      local showTertiary = false
       local titleSize = 14
       local lineSize = 12
       if SkyInfoTiles.GetActiveTiles then
@@ -2601,6 +2708,7 @@ function SkyInfoTiles.ToggleOptionsWindow()
         for _, tile in ipairs(tiles) do
           if tile.key == "charstats" or tile.type == "charstats" then
             hideTitle = tile.hideTitle or false
+            showTertiary = tile.showTertiary or false
             titleSize = tile.titleSize or 14
             lineSize = tile.lineSize or 12
             break
@@ -2611,6 +2719,11 @@ function SkyInfoTiles.ToggleOptionsWindow()
       -- Update hide title checkbox
       if f.tabContent[4].hideTitleCheck then
         f.tabContent[4].hideTitleCheck:SetChecked(hideTitle)
+      end
+
+      -- Update show tertiary stats checkbox
+      if f.tabContent[4].showTertiaryCheck then
+        f.tabContent[4].showTertiaryCheck:SetChecked(showTertiary)
       end
 
       -- Update title size slider

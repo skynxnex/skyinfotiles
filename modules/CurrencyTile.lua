@@ -302,7 +302,14 @@ local function RebuildRows(f, cfg)
       fs:SetShadowColor(0, 0, 0, 1)
       fs:SetShadowOffset(1, -1)
       fs:SetJustifyH("LEFT")
-      fs:SetText("...")
+
+      -- Set initial text directly instead of "..."
+      local text, iconID, isSeparator = BuildLine(entry, cfg)
+      fs:SetText(text or entry.label or "?")
+      if iconID then
+        icon:SetTexture(iconID)
+      end
+
       UI.Outline(fs)
 
       f._icons[i]  = icon
@@ -404,8 +411,16 @@ function API.update(frame, cfg)
   for i, entry in ipairs(frame._entries or {}) do
     if not entry.separator then
       local text, iconID, isSeparator = BuildLine(entry, cfg)
-      if frame._labels[i] then frame._labels[i]:SetText(text or entry.label or "?") end
-      if frame._icons[i] and iconID then frame._icons[i]:SetTexture(iconID) end
+      if frame._labels[i] then
+        frame._labels[i]:SetText(text or entry.label or "?")
+      end
+      if frame._icons[i] then
+        if iconID then
+          frame._icons[i]:SetTexture(iconID)
+        else
+          frame._icons[i]:SetTexture(nil)
+        end
+      end
     end
   end
 end
