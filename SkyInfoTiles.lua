@@ -222,7 +222,7 @@ function SkyInfoTiles.GetOrCreateTileCfg(key)
   local tiles = SkyInfoTiles.GetActiveTiles()
   for _, t in ipairs(tiles) do if t.key == key then cfg = t; break end end
   if not cfg then
-    cfg = { key = cat.key, type = cat.type, label = cat.label, enabled = (cat.defaultEnabled ~= false), point = "CENTER", x = 0, y = 0 }
+    cfg = { key = cat.key, type = cat.type, label = cat.label, enabled = (cat.defaultEnabled ~= false), point = "CENTER", x = 0, y = 0, strata = "MEDIUM" }
     table.insert(tiles, cfg)
   end
   return cfg
@@ -249,7 +249,7 @@ local function EnsureTileExistsForCatInTiles(tiles, cat)
   cfg = {
     key = cat.key, type = cat.type, label = cat.label,
     enabled = (cat.defaultEnabled ~= false),
-    point = "CENTER", x = 0, y = 0,
+    point = "CENTER", x = 0, y = 0, strata = "MEDIUM",
   }
   table.insert(tiles, cfg)
   return cfg
@@ -543,6 +543,15 @@ function SkyInfoTiles.Rebuild()
       if ttype and ttype.create then
         local frame = ttype.create(UIParent, cfg)
         frame._cfg = cfg
+
+        -- Apply frame strata
+        if cfg.strata and frame.SetFrameStrata then
+          local validStrata = { BACKGROUND=true, LOW=true, MEDIUM=true, HIGH=true, DIALOG=true, FULLSCREEN=true, FULLSCREEN_DIALOG=true, TOOLTIP=true }
+          if validStrata[cfg.strata] then
+            frame:SetFrameStrata(cfg.strata)
+          end
+        end
+
         frame:ClearAllPoints()
         local p = cfg.point or "CENTER"
         local x = cfg.x or 0
@@ -595,7 +604,7 @@ local function ResetToCatalogDefaults()
     table.insert(tiles, {
       key = cat.key, type = cat.type, label = cat.label,
       enabled = (cat.defaultEnabled ~= false),
-      point = "CENTER", x = 0, y = 0,
+      point = "CENTER", x = 0, y = 0, strata = "MEDIUM",
     })
   end
   SkyInfoTiles.Rebuild()
@@ -762,6 +771,30 @@ SlashCmdList["SKYINFOTILES"] = function(msg)
     cfg.scale = v
     SkyInfoTiles.Rebuild(); SkyInfoTiles.UpdateAll()
     Print(string.format("Scale for [%s] set to %.2f.", key, v))
+    return
+  end
+
+  if cmd == "strata" then
+    local key, strataVal = rest:match("^(%S+)%s+(%S+)$")
+    if not key or not strataVal then
+      Print("Usage: /skytiles strata <key> <BACKGROUND|LOW|MEDIUM|HIGH|DIALOG|FULLSCREEN|FULLSCREEN_DIALOG|TOOLTIP>")
+      return
+    end
+
+    -- Validate strata
+    local validStrata = { BACKGROUND=true, LOW=true, MEDIUM=true, HIGH=true, DIALOG=true, FULLSCREEN=true, FULLSCREEN_DIALOG=true, TOOLTIP=true }
+    strataVal = strataVal:upper()
+    if not validStrata[strataVal] then
+      Print("Invalid strata. Valid values: BACKGROUND, LOW, MEDIUM, HIGH, DIALOG, FULLSCREEN, FULLSCREEN_DIALOG, TOOLTIP")
+      return
+    end
+
+    local cat = FindCatByKey(key)
+    if not cat then Print("Unknown key: " .. tostring(key)); return end
+    local cfg = FindTileByKey(key) or EnsureTileExistsForCat(cat)
+    cfg.strata = strataVal
+    SkyInfoTiles.Rebuild(); SkyInfoTiles.UpdateAll()
+    Print(string.format("Strata for [%s] set to %s.", key, strataVal))
     return
   end
 

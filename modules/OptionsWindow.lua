@@ -506,6 +506,51 @@ local function CreateOptionsWindow()
   yOffsetCurr = currencyPosSliders.newYOffset
 
   yOffsetCurr = yOffsetCurr - 20
+
+  -- Strata dropdown
+  local strataLabel = scrollChild:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+  strataLabel:SetPoint("TOPLEFT", 10, yOffsetCurr)
+  strataLabel:SetText("Frame Strata (Layer):")
+  strataLabel:SetTextColor(1, 0.82, 0, 1)
+
+  local strataDropdown = CreateFrame("Frame", "SkyInfoTilesCurrenciesStrataDropdown", scrollChild, "UIDropDownMenuTemplate")
+  strataDropdown:SetPoint("TOPLEFT", strataLabel, "BOTTOMLEFT", -15, -5)
+  UIDropDownMenu_SetWidth(strataDropdown, 150)
+
+  local function OnStrataSelect(self)
+    local value = self.value
+    if SkyInfoTiles.GetActiveTiles then
+      local tiles = SkyInfoTiles.GetActiveTiles()
+      for _, tile in ipairs(tiles) do
+        if tile.key == "currencies" or tile.type == "currencies" then
+          tile.strata = value
+          if SkyInfoTiles.Rebuild and SkyInfoTiles.UpdateAll then
+            SkyInfoTiles.Rebuild()
+            SkyInfoTiles.UpdateAll()
+          end
+          break
+        end
+      end
+    end
+    UIDropDownMenu_SetText(strataDropdown, value)
+  end
+
+  UIDropDownMenu_Initialize(strataDropdown, function(self, level)
+    local strata = { "BACKGROUND", "LOW", "MEDIUM", "HIGH", "DIALOG", "FULLSCREEN", "FULLSCREEN_DIALOG", "TOOLTIP" }
+    for _, s in ipairs(strata) do
+      local info = UIDropDownMenu_CreateInfo()
+      info.text = s
+      info.value = s
+      info.func = OnStrataSelect
+      info.checked = false
+      UIDropDownMenu_AddButton(info, level)
+    end
+  end)
+
+  UIDropDownMenu_SetText(strataDropdown, "MEDIUM")
+  currencyTab.strataDropdown = strataDropdown
+
+  yOffsetCurr = yOffsetCurr - 60
   currencyTab._currencyListStartY = yOffsetCurr  -- Save for PopulateCurrencies
 
   -- Function to populate currency checkboxes
@@ -842,6 +887,48 @@ local function CreateOptionsWindow()
   keystoneTab.yPosSlider = yPosSlider
   keystoneTab.yPosEditBox = yPosEditBox
   yOffset = yOffset - 90
+
+  -- ========== STRATA ==========
+  local strataLabel = scrollChild:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+  strataLabel:SetPoint("TOPLEFT", 10, yOffset)
+  strataLabel:SetText("Frame Strata:")
+  strataLabel:SetTextColor(1, 0.82, 0, 1)
+
+  local strataDropdown = CreateFrame("Frame", "SkyInfoTilesKeystoneStrataDropdown", scrollChild, "UIDropDownMenuTemplate")
+  strataDropdown:SetPoint("TOPLEFT", strataLabel, "BOTTOMLEFT", -15, -5)
+  UIDropDownMenu_SetWidth(strataDropdown, 150)
+
+  local function OnStrataSelect(self)
+    local tiles = SkyInfoTiles.GetActiveTiles()
+    for _, tile in ipairs(tiles) do
+      if tile.key == "keystone" or tile.type == "keystone" then
+        tile.strata = self.value
+        if SkyInfoTiles.Rebuild then
+          SkyInfoTiles.Rebuild()
+        end
+        if SkyInfoTiles.UpdateAll then
+          SkyInfoTiles.UpdateAll()
+        end
+        break
+      end
+    end
+    UIDropDownMenu_SetText(strataDropdown, self.value)
+  end
+
+  UIDropDownMenu_Initialize(strataDropdown, function(self, level)
+    local info = UIDropDownMenu_CreateInfo()
+    local strataOptions = {"BACKGROUND", "LOW", "MEDIUM", "HIGH", "DIALOG", "FULLSCREEN", "FULLSCREEN_DIALOG", "TOOLTIP"}
+    for _, strata in ipairs(strataOptions) do
+      info.text = strata
+      info.value = strata
+      info.func = OnStrataSelect
+      UIDropDownMenu_AddButton(info)
+    end
+  end)
+
+  UIDropDownMenu_SetText(strataDropdown, "MEDIUM")
+  keystoneTab.strataDropdown = strataDropdown
+  yOffset = yOffset - 50
 
   -- ========== BACKGROUND ==========
   local bgLabel = scrollChild:CreateFontString(nil, "OVERLAY", "GameFontNormal")
@@ -1253,7 +1340,47 @@ local function CreateOptionsWindow()
   charStatsTab.yPosEditBox = charStatsPosSliders.yPosEditBox
   yOffsetChar = charStatsPosSliders.newYOffset
 
-  yOffsetChar = yOffsetChar - 20
+  -- ========== STRATA ==========
+  local strataLabel = scrollChild:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+  strataLabel:SetPoint("TOPLEFT", 10, yOffsetChar)
+  strataLabel:SetText("Frame Strata:")
+  strataLabel:SetTextColor(1, 0.82, 0, 1)
+
+  local strataDropdown = CreateFrame("Frame", "SkyInfoTilesCharStatsStrataDropdown", scrollChild, "UIDropDownMenuTemplate")
+  strataDropdown:SetPoint("TOPLEFT", strataLabel, "BOTTOMLEFT", -15, -5)
+  UIDropDownMenu_SetWidth(strataDropdown, 150)
+
+  local function OnStrataSelect(self)
+    local tiles = SkyInfoTiles.GetActiveTiles()
+    for _, tile in ipairs(tiles) do
+      if tile.key == "charstats" or tile.type == "charstats" then
+        tile.strata = self.value
+        if SkyInfoTiles.Rebuild then
+          SkyInfoTiles.Rebuild()
+        end
+        if SkyInfoTiles.UpdateAll then
+          SkyInfoTiles.UpdateAll()
+        end
+        break
+      end
+    end
+    UIDropDownMenu_SetText(strataDropdown, self.value)
+  end
+
+  UIDropDownMenu_Initialize(strataDropdown, function(self, level)
+    local info = UIDropDownMenu_CreateInfo()
+    local strataOptions = {"BACKGROUND", "LOW", "MEDIUM", "HIGH", "DIALOG", "FULLSCREEN", "FULLSCREEN_DIALOG", "TOOLTIP"}
+    for _, strata in ipairs(strataOptions) do
+      info.text = strata
+      info.value = strata
+      info.func = OnStrataSelect
+      UIDropDownMenu_AddButton(info)
+    end
+  end)
+
+  UIDropDownMenu_SetText(strataDropdown, "MEDIUM")
+  charStatsTab.strataDropdown = strataDropdown
+  yOffsetChar = yOffsetChar - 70
 
   -- Description
   local desc = scrollChild:CreateFontString(nil, "OVERLAY", "GameFontNormal")
@@ -1919,6 +2046,47 @@ local function CreateOptionsWindow()
     end
   end)
 
+  -- ========== STRATA ==========
+  local strataLabel = scrollChild:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+  strataLabel:SetPoint("TOPLEFT", outlineColorLabel, "BOTTOMLEFT", 0, -80)
+  strataLabel:SetText("Frame Strata:")
+  strataLabel:SetTextColor(1, 0.82, 0, 1)
+
+  local strataDropdown = CreateFrame("Frame", "SkyInfoTilesCrosshairStrataDropdown", scrollChild, "UIDropDownMenuTemplate")
+  strataDropdown:SetPoint("TOPLEFT", strataLabel, "BOTTOMLEFT", -15, -5)
+  UIDropDownMenu_SetWidth(strataDropdown, 150)
+
+  local function OnStrataSelect(self)
+    local tiles = SkyInfoTiles.GetActiveTiles()
+    for _, tile in ipairs(tiles) do
+      if tile.key == "crosshair" or tile.type == "crosshair" then
+        tile.strata = self.value
+        if SkyInfoTiles.Rebuild then
+          SkyInfoTiles.Rebuild()
+        end
+        if SkyInfoTiles.UpdateAll then
+          SkyInfoTiles.UpdateAll()
+        end
+        break
+      end
+    end
+    UIDropDownMenu_SetText(strataDropdown, self.value)
+  end
+
+  UIDropDownMenu_Initialize(strataDropdown, function(self, level)
+    local info = UIDropDownMenu_CreateInfo()
+    local strataOptions = {"BACKGROUND", "LOW", "MEDIUM", "HIGH", "DIALOG", "FULLSCREEN", "FULLSCREEN_DIALOG", "TOOLTIP"}
+    for _, strata in ipairs(strataOptions) do
+      info.text = strata
+      info.value = strata
+      info.func = OnStrataSelect
+      UIDropDownMenu_AddButton(info)
+    end
+  end)
+
+  UIDropDownMenu_SetText(strataDropdown, "MEDIUM")
+  crosshairTab.strataDropdown = strataDropdown
+
   -- === TAB 6: CLOCK (with font and size options) ===
   local clockTab = CreateFrame("Frame", nil, contentArea)
   clockTab:SetAllPoints()
@@ -1948,6 +2116,48 @@ local function CreateOptionsWindow()
   clockTab.yPosSlider = clockPosSliders.yPosSlider
   clockTab.yPosEditBox = clockPosSliders.yPosEditBox
   yOffsetClock = clockPosSliders.newYOffset
+
+  -- ========== STRATA ==========
+  local strataLabel = clockTab:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+  strataLabel:SetPoint("TOPLEFT", 10, yOffsetClock)
+  strataLabel:SetText("Frame Strata:")
+  strataLabel:SetTextColor(1, 0.82, 0, 1)
+
+  local strataDropdown = CreateFrame("Frame", "SkyInfoTilesClockStrataDropdown", clockTab, "UIDropDownMenuTemplate")
+  strataDropdown:SetPoint("TOPLEFT", strataLabel, "BOTTOMLEFT", -15, -5)
+  UIDropDownMenu_SetWidth(strataDropdown, 150)
+
+  local function OnStrataSelect(self)
+    local tiles = SkyInfoTiles.GetActiveTiles()
+    for _, tile in ipairs(tiles) do
+      if tile.key == "clock" or tile.type == "clock" then
+        tile.strata = self.value
+        if SkyInfoTiles.Rebuild then
+          SkyInfoTiles.Rebuild()
+        end
+        if SkyInfoTiles.UpdateAll then
+          SkyInfoTiles.UpdateAll()
+        end
+        break
+      end
+    end
+    UIDropDownMenu_SetText(strataDropdown, self.value)
+  end
+
+  UIDropDownMenu_Initialize(strataDropdown, function(self, level)
+    local info = UIDropDownMenu_CreateInfo()
+    local strataOptions = {"BACKGROUND", "LOW", "MEDIUM", "HIGH", "DIALOG", "FULLSCREEN", "FULLSCREEN_DIALOG", "TOOLTIP"}
+    for _, strata in ipairs(strataOptions) do
+      info.text = strata
+      info.value = strata
+      info.func = OnStrataSelect
+      UIDropDownMenu_AddButton(info)
+    end
+  end)
+
+  UIDropDownMenu_SetText(strataDropdown, "MEDIUM")
+  clockTab.strataDropdown = strataDropdown
+  yOffsetClock = yOffsetClock - 70
 
   -- Font dropdown label
   local fontLabel = clockTab:CreateFontString(nil, "OVERLAY", "GameFontNormal")
@@ -2231,6 +2441,48 @@ local function CreateOptionsWindow()
 
   UIDropDownMenu_SetText(orientDropdown, "Horizontal")
   dungeonTab.orientDropdown = orientDropdown
+  yOffsetDungeon = yOffsetDungeon - 70
+
+  -- ========== STRATA ==========
+  local strataLabel = dungeonTab:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+  strataLabel:SetPoint("TOPLEFT", 10, yOffsetDungeon)
+  strataLabel:SetText("Frame Strata:")
+  strataLabel:SetTextColor(1, 0.82, 0, 1)
+
+  local strataDropdown = CreateFrame("Frame", "SkyInfoTilesDungeonPortsStrataDropdown", dungeonTab, "UIDropDownMenuTemplate")
+  strataDropdown:SetPoint("TOPLEFT", strataLabel, "BOTTOMLEFT", -15, -5)
+  UIDropDownMenu_SetWidth(strataDropdown, 150)
+
+  local function OnStrataSelect(self)
+    local tiles = SkyInfoTiles.GetActiveTiles()
+    for _, tile in ipairs(tiles) do
+      if tile.key == "dungeonports" or tile.type == "dungeonports" then
+        tile.strata = self.value
+        if SkyInfoTiles.Rebuild then
+          SkyInfoTiles.Rebuild()
+        end
+        if SkyInfoTiles.UpdateAll then
+          SkyInfoTiles.UpdateAll()
+        end
+        break
+      end
+    end
+    UIDropDownMenu_SetText(strataDropdown, self.value)
+  end
+
+  UIDropDownMenu_Initialize(strataDropdown, function(self, level)
+    local info = UIDropDownMenu_CreateInfo()
+    local strataOptions = {"BACKGROUND", "LOW", "MEDIUM", "HIGH", "DIALOG", "FULLSCREEN", "FULLSCREEN_DIALOG", "TOOLTIP"}
+    for _, strata in ipairs(strataOptions) do
+      info.text = strata
+      info.value = strata
+      info.func = OnStrataSelect
+      UIDropDownMenu_AddButton(info)
+    end
+  end)
+
+  UIDropDownMenu_SetText(strataDropdown, "MEDIUM")
+  dungeonTab.strataDropdown = strataDropdown
 
   -- Show first tab by default and layout tabs
   tabs[1]:Click()
@@ -2437,6 +2689,34 @@ local function RefreshOptionsWindow()
       if tab.yPosEditBox then
         tab.yPosEditBox:SetText(tostring(math.floor(yPos)))
       end
+    end
+  end
+
+  -- Refresh strata dropdowns for all tiles
+  local tilesWithStrata = {
+    {index = 2, key = "currencies"},
+    {index = 3, key = "keystone"},
+    {index = 4, key = "charstats"},
+    {index = 5, key = "crosshair"},
+    {index = 6, key = "clock"},
+    {index = 7, key = "dungeonports"}
+  }
+
+  for _, tileInfo in ipairs(tilesWithStrata) do
+    if f.tabContent and f.tabContent[tileInfo.index] and f.tabContent[tileInfo.index].strataDropdown then
+      local strata = "MEDIUM" -- Default
+
+      if SkyInfoTiles.GetActiveTiles then
+        local tiles = SkyInfoTiles.GetActiveTiles()
+        for _, tile in ipairs(tiles) do
+          if tile.key == tileInfo.key or tile.type == tileInfo.key then
+            strata = tile.strata or "MEDIUM"
+            break
+          end
+        end
+      end
+
+      UIDropDownMenu_SetText(f.tabContent[tileInfo.index].strataDropdown, strata)
     end
   end
 end
@@ -2793,6 +3073,34 @@ function SkyInfoTiles.ToggleOptionsWindow()
         if tab.yPosEditBox then
           tab.yPosEditBox:SetText(tostring(math.floor(yPos)))
         end
+      end
+    end
+
+    -- Refresh strata dropdowns for all tiles
+    local tilesWithStrata = {
+      {index = 2, key = "currencies"},
+      {index = 3, key = "keystone"},
+      {index = 4, key = "charstats"},
+      {index = 5, key = "crosshair"},
+      {index = 6, key = "clock"},
+      {index = 7, key = "dungeonports"}
+    }
+
+    for _, tileInfo in ipairs(tilesWithStrata) do
+      if f.tabContent and f.tabContent[tileInfo.index] and f.tabContent[tileInfo.index].strataDropdown then
+        local strata = "MEDIUM" -- Default
+
+        if SkyInfoTiles.GetActiveTiles then
+          local tiles = SkyInfoTiles.GetActiveTiles()
+          for _, tile in ipairs(tiles) do
+            if tile.key == tileInfo.key or tile.type == tileInfo.key then
+              strata = tile.strata or "MEDIUM"
+              break
+            end
+          end
+        end
+
+        UIDropDownMenu_SetText(f.tabContent[tileInfo.index].strataDropdown, strata)
       end
     end
 
