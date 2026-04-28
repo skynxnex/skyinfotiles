@@ -779,7 +779,9 @@ function API.update(frame, cfg)
   -- Ensure backdrop frame exists and has correct stacking
   if frame.backdrop then
     -- Make sure backdrop is visible and behind other elements
-    frame.backdrop:Show()
+    if not (InCombatLockdown and InCombatLockdown()) then
+      frame.backdrop:Show()
+    end
 
     -- ALWAYS use bgFile (never nil) - control visibility with alpha instead
     -- IMPORTANT: Use WHITE8x8 (pure white texture) so SetBackdropColor works correctly
