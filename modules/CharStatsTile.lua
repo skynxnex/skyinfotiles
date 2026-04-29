@@ -22,7 +22,8 @@ end
 
 local function Safe_GetAverageItemLevel()
   if type(_G.GetAverageItemLevel) ~= "function" then return 0 end
-  local a, b = _G.GetAverageItemLevel()
+  local ok, a, b = pcall(_G.GetAverageItemLevel)
+  if not ok then return 0 end
   local overall  = tonumber(a) or 0
   local equipped = tonumber(b) or nil
   return equipped or overall
@@ -110,9 +111,24 @@ local function GatherStats()
   local mastRating  = Safe_GetCombatRating(MASTERY_TOKEN)
   local versRating  = Safe_GetCombatRating(VERS_INC_TOKEN)
 
-  local critPct  = (type(_G.GetCritChance)    == "function" and (_G.GetCritChance() or 0)) or 0
-  local hastePct = (type(_G.GetHaste)         == "function" and (_G.GetHaste() or 0)) or 0
-  local mastPct  = (type(_G.GetMasteryEffect) == "function" and (_G.GetMasteryEffect() or 0)) or 0
+  local critPct = 0
+  local hastePct = 0
+  local mastPct = 0
+
+  if type(_G.GetCritChance) == "function" then
+    local ok, val = pcall(_G.GetCritChance)
+    critPct = (ok and tonumber(val)) or 0
+  end
+
+  if type(_G.GetHaste) == "function" then
+    local ok, val = pcall(_G.GetHaste)
+    hastePct = (ok and tonumber(val)) or 0
+  end
+
+  if type(_G.GetMasteryEffect) == "function" then
+    local ok, val = pcall(_G.GetMasteryEffect)
+    mastPct = (ok and tonumber(val)) or 0
+  end
 
   local versInc, versRed = Safe_GetVersatilityBonuses(versRating)
 
@@ -233,6 +249,7 @@ function API.create(parent, cfg)
     f:RegisterEvent("PLAYER_AVG_ITEM_LEVEL_UPDATE")
     f:RegisterEvent("PLAYER_SPECIALIZATION_CHANGED")
     f:RegisterEvent("UNIT_STATS")
+    f:RegisterEvent("PLAYER_REGEN_ENABLED")  -- Combat ended - refresh stats
     f:SetScript("OnEvent", function(self) API.update(self, cfg) end)
   end
 
@@ -363,20 +380,32 @@ function API.update(frame, cfg)
 
   frame:SetSize(360, newHeight)
 
+  -- Try to gather current stats
   local ok, S_or_err = pcall(GatherStats)
-  if not ok or not S_or_err then
-    frame.line1:SetText("ilvl: –")
-    frame.line2:SetText("Primary: –")
-    frame.line3:SetText("Critical Strike: –")
-    frame.line4:SetText("Haste: –")
-    frame.line5:SetText("Mastery: –")
-    frame.line6:SetText("Versatility: –")
-    frame.line7:SetText("Leech: –")
-    frame.line8:SetText("Avoidance: –")
-    frame.line9:SetText("Speed: –")
-    return
+  local S = nil
+
+  if ok and S_or_err then
+    -- Success - cache the result and use it
+    S = S_or_err
+    frame._cachedStats = S
+  elseif frame._cachedStats then
+    -- Failed but we have cached data - use it
+    S = frame._cachedStats
+  else
+    -- Failed and no cache - use default fallback values
+    S = {
+      ilvl = 0,
+      primaryName = "Primary",
+      primaryVal = 0,
+      crit = { rating = 0, pct = 0 },
+      haste = { rating = 0, pct = 0 },
+      mast = { rating = 0, pct = 0 },
+      vers = { rating = 0, inc = 0, red = 0 },
+      leech = { rating = 0, pct = 0 },
+      avoid = { rating = 0, pct = 0 },
+      speed = { rating = 0, pct = 0 },
+    }
   end
-  local S = S_or_err
 
   -- Determine desired order (saved in cfg.order) with sane defaults and validation
   local DEFAULT_ORDER_BASE = { "ilvl", "primary", "crit", "haste", "mastery", "versatility" }
