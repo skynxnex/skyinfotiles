@@ -200,6 +200,37 @@ local function CreateOptionsWindow()
   f:SetClampedToScreen(true)
   f:Hide()
 
+  -- Register with UISpecialFrames to allow ESC key to close the window
+  table.insert(UISpecialFrames, "SkyInfoTilesOptionsFrame")
+
+  -- Track if we were open before combat
+  f._wasOpenBeforeCombat = false
+
+  -- Hide options window when entering combat, reopen when leaving
+  f:RegisterEvent("PLAYER_REGEN_DISABLED")  -- Entering combat
+  f:RegisterEvent("PLAYER_REGEN_ENABLED")   -- Leaving combat
+  f:SetScript("OnEvent", function(self, event)
+    if event == "PLAYER_REGEN_DISABLED" then
+      -- Entering combat - close if open
+      if self:IsShown() then
+        self._wasOpenBeforeCombat = true
+        self:Hide()
+        if DEFAULT_CHAT_FRAME then
+          DEFAULT_CHAT_FRAME:AddMessage("|cff66ccffSkyInfoTiles:|r Options closed (entering combat)")
+        end
+      end
+    elseif event == "PLAYER_REGEN_ENABLED" then
+      -- Leaving combat - reopen if it was open before
+      if self._wasOpenBeforeCombat then
+        self._wasOpenBeforeCombat = false
+        self:Show()
+        if DEFAULT_CHAT_FRAME then
+          DEFAULT_CHAT_FRAME:AddMessage("|cff66ccffSkyInfoTiles:|r Options reopened")
+        end
+      end
+    end
+  end)
+
   -- Modern dark backdrop
   f:SetBackdrop({
     bgFile = "Interface\\Buttons\\WHITE8X8",
