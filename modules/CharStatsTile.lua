@@ -384,27 +384,36 @@ function API.update(frame, cfg)
   local ok, S_or_err = pcall(GatherStats)
   local S = nil
 
-  if ok and S_or_err then
-    -- Success - cache the result and use it
+  -- Validate if stats are reasonable (ilvl > 0 means we got real data)
+  local function isValidStats(stats)
+    return stats and stats.ilvl and stats.ilvl > 0
+  end
+
+  if ok and isValidStats(S_or_err) then
+    -- Success with valid data - cache and use it
     S = S_or_err
     frame._cachedStats = S
-  elseif frame._cachedStats then
-    -- Failed but we have cached data - use it
+  elseif frame._cachedStats and isValidStats(frame._cachedStats) then
+    -- Failed or invalid data, but we have valid cached data - use cache
     S = frame._cachedStats
   else
-    -- Failed and no cache - use default fallback values
-    S = {
-      ilvl = 0,
-      primaryName = "Primary",
-      primaryVal = 0,
-      crit = { rating = 0, pct = 0 },
-      haste = { rating = 0, pct = 0 },
-      mast = { rating = 0, pct = 0 },
-      vers = { rating = 0, inc = 0, red = 0 },
-      leech = { rating = 0, pct = 0 },
-      avoid = { rating = 0, pct = 0 },
-      speed = { rating = 0, pct = 0 },
-    }
+    -- No valid cached data - initialize with current attempt or empty defaults
+    if ok and S_or_err then
+      S = S_or_err
+    else
+      S = {
+        ilvl = 0,
+        primaryName = "Primary",
+        primaryVal = 0,
+        crit = { rating = 0, pct = 0 },
+        haste = { rating = 0, pct = 0 },
+        mast = { rating = 0, pct = 0 },
+        vers = { rating = 0, inc = 0, red = 0 },
+        leech = { rating = 0, pct = 0 },
+        avoid = { rating = 0, pct = 0 },
+        speed = { rating = 0, pct = 0 },
+      }
+    end
   end
 
   -- Determine desired order (saved in cfg.order) with sane defaults and validation

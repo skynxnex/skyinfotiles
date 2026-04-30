@@ -709,9 +709,9 @@ local function CreateOptionsWindow()
 
   local scaleSlider = CreateFrame("Slider", "SkyInfoTilesKeystoneScaleSlider", scrollChild, "OptionsSliderTemplate")
   scaleSlider:SetPoint("TOPLEFT", scaleLabel, "BOTTOMLEFT", 5, -20)
-  scaleSlider:SetWidth(250)
+  scaleSlider:SetWidth(200)
   scaleSlider:SetMinMaxValues(0.5, 2.0)
-  scaleSlider:SetValueStep(0.05)
+  scaleSlider:SetValueStep(0.01)
   scaleSlider:SetValue(1.0)
   scaleSlider:SetObeyStepOnDrag(true)
 
@@ -719,8 +719,44 @@ local function CreateOptionsWindow()
   _G[scaleSlider:GetName() .. "High"]:SetText("200%")
   _G[scaleSlider:GetName() .. "Text"]:SetText("100%")
 
+  -- Scale EditBox (manual input)
+  local scaleEditBox = CreateFrame("EditBox", nil, scrollChild, "InputBoxTemplate")
+  scaleEditBox:SetSize(60, 20)
+  scaleEditBox:SetPoint("LEFT", scaleSlider, "RIGHT", 15, 0)
+  scaleEditBox:SetAutoFocus(false)
+  scaleEditBox:SetNumeric(false)
+  scaleEditBox:SetText("100")
+  scaleEditBox:SetScript("OnEnterPressed", function(self)
+    local value = tonumber(self:GetText())
+    if value then
+      -- Convert percentage to decimal (e.g., 100 -> 1.0)
+      value = value / 100
+      if value < 0.5 then value = 0.5 end
+      if value > 2.0 then value = 2.0 end
+      self:SetText(tostring(math.floor(value * 100)))
+      scaleSlider:SetValue(value)
+      if SkyInfoTiles.GetActiveTiles then
+        local tiles = SkyInfoTiles.GetActiveTiles()
+        for _, tile in ipairs(tiles) do
+          if tile.key == "keystone" or tile.type == "keystone" then
+            tile.scale = value
+            if SkyInfoTiles.UpdateAll then
+              SkyInfoTiles.UpdateAll()
+            end
+            break
+          end
+        end
+      end
+    end
+    self:ClearFocus()
+  end)
+  scaleEditBox:SetScript("OnEscapePressed", function(self)
+    self:ClearFocus()
+  end)
+
   scaleSlider:SetScript("OnValueChanged", function(self, value)
     _G[self:GetName() .. "Text"]:SetText(string.format("%.0f%%", value * 100))
+    scaleEditBox:SetText(tostring(math.floor(value * 100)))
     if SkyInfoTiles.GetActiveTiles then
       local tiles = SkyInfoTiles.GetActiveTiles()
       for _, tile in ipairs(tiles) do
@@ -736,6 +772,7 @@ local function CreateOptionsWindow()
   end)
 
   keystoneTab.scaleSlider = scaleSlider
+  keystoneTab.scaleEditBox = scaleEditBox
   yOffset = yOffset - 90
 
   -- ========== POSITION (X coordinate) ==========
@@ -2592,6 +2629,9 @@ local function RefreshOptionsWindow()
       keystoneTab.scaleSlider:SetValue(scale)
       _G[keystoneTab.scaleSlider:GetName() .. "Text"]:SetText(string.format("%.0f%%", scale * 100))
     end
+    if keystoneTab.scaleEditBox then
+      keystoneTab.scaleEditBox:SetText(tostring(math.floor(scale * 100)))
+    end
     if keystoneTab.xPosSlider then
       keystoneTab.xPosSlider._programmaticChange = true
       keystoneTab.xPosSlider:SetValue(xPos)
@@ -2813,6 +2853,9 @@ function SkyInfoTiles.ToggleOptionsWindow()
       if keystoneTab.scaleSlider then
         keystoneTab.scaleSlider:SetValue(scale)
         _G[keystoneTab.scaleSlider:GetName() .. "Text"]:SetText(string.format("%.0f%%", scale * 100))
+      end
+      if keystoneTab.scaleEditBox then
+        keystoneTab.scaleEditBox:SetText(tostring(math.floor(scale * 100)))
       end
       if keystoneTab.xPosSlider then
         keystoneTab.xPosSlider._programmaticChange = true
