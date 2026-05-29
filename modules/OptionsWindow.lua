@@ -4,6 +4,81 @@ local SkyInfoTiles = _G[ADDON_NAME]
 -- Custom standalone options window
 local optionsFrame = nil
 
+-- StaticPopup dialogs for profile management
+StaticPopupDialogs["SKYINFOTILES_NEW_PROFILE"] = {
+  text = "Enter a name for the new profile:",
+  button1 = "Create",
+  button2 = "Cancel",
+  hasEditBox = true,
+  OnShow = function(self)
+    self.EditBox:SetText("")
+    self.EditBox:SetFocus()
+  end,
+  OnAccept = function(self)
+    local name = self.EditBox:GetText()
+    if name and name ~= "" then
+      local success, err = SkyInfoTiles.CreateProfile(name)
+      if success then
+        print("|cff66ccffSkyInfoTiles:|r Profile created: " .. name)
+        -- Automatically switch to the new profile
+        SkyInfoTiles.SetActiveProfile(name)
+      else
+        print("|cff66ccffSkyInfoTiles:|r " .. tostring(err))
+      end
+    end
+  end,
+  timeout = 0,
+  whileDead = true,
+  hideOnEscape = true,
+  preferredIndex = 3,
+}
+
+StaticPopupDialogs["SKYINFOTILES_RENAME_PROFILE"] = {
+  text = "Rename profile '%s' to:",
+  button1 = "Rename",
+  button2 = "Cancel",
+  hasEditBox = true,
+  OnShow = function(self)
+    self.EditBox:SetText("")
+    self.EditBox:SetFocus()
+  end,
+  OnAccept = function(self)
+    local oldName = self.data
+    local newName = self.EditBox:GetText()
+    if newName and newName ~= "" then
+      local success, err = SkyInfoTiles.RenameProfile(oldName, newName)
+      if success then
+        print("|cff66ccffSkyInfoTiles:|r Profile renamed to: " .. newName)
+      else
+        print("|cff66ccffSkyInfoTiles:|r " .. tostring(err))
+      end
+    end
+  end,
+  timeout = 0,
+  whileDead = true,
+  hideOnEscape = true,
+  preferredIndex = 3,
+}
+
+StaticPopupDialogs["SKYINFOTILES_DELETE_PROFILE"] = {
+  text = "Delete profile '%s'?\n\nAny characters using this profile will be switched to Default.",
+  button1 = "Delete",
+  button2 = "Cancel",
+  OnAccept = function(self)
+    local profileName = self.data
+    local success, err = SkyInfoTiles.DeleteProfile(profileName)
+    if success then
+      print("|cff66ccffSkyInfoTiles:|r Profile deleted: " .. profileName)
+    else
+      print("|cff66ccffSkyInfoTiles:|r " .. tostring(err))
+    end
+  end,
+  timeout = 0,
+  whileDead = true,
+  hideOnEscape = true,
+  preferredIndex = 3,
+}
+
 -- Helper function to create X/Y position sliders for a tile
 local function CreatePositionSliders(parent, tileKey, tileType, yOffset)
   local scrollChild = parent
@@ -44,7 +119,7 @@ local function CreatePositionSliders(parent, tileKey, tileType, yOffset)
         local tiles = SkyInfoTiles.GetActiveTiles()
         for _, tile in ipairs(tiles) do
           if tile.key == tileKey or tile.type == tileType then
-            tile.point = "CENTER"
+            tile.point = "TOPLEFT"
             tile.x = value
             if SkyInfoTiles.Rebuild then
               SkyInfoTiles.Rebuild()
@@ -75,7 +150,7 @@ local function CreatePositionSliders(parent, tileKey, tileType, yOffset)
       local tiles = SkyInfoTiles.GetActiveTiles()
       for _, tile in ipairs(tiles) do
         if tile.key == tileKey or tile.type == tileType then
-          tile.point = "CENTER"
+          tile.point = "TOPLEFT"
           tile.x = rounded
           if SkyInfoTiles.Rebuild then
             SkyInfoTiles.Rebuild()
@@ -124,7 +199,7 @@ local function CreatePositionSliders(parent, tileKey, tileType, yOffset)
         local tiles = SkyInfoTiles.GetActiveTiles()
         for _, tile in ipairs(tiles) do
           if tile.key == tileKey or tile.type == tileType then
-            tile.point = "CENTER"
+            tile.point = "TOPLEFT"
             tile.y = value
             if SkyInfoTiles.Rebuild then
               SkyInfoTiles.Rebuild()
@@ -155,7 +230,7 @@ local function CreatePositionSliders(parent, tileKey, tileType, yOffset)
       local tiles = SkyInfoTiles.GetActiveTiles()
       for _, tile in ipairs(tiles) do
         if tile.key == tileKey or tile.type == tileType then
-          tile.point = "CENTER"
+          tile.point = "TOPLEFT"
           tile.y = rounded
           if SkyInfoTiles.Rebuild then
             SkyInfoTiles.Rebuild()
@@ -168,11 +243,49 @@ local function CreatePositionSliders(parent, tileKey, tileType, yOffset)
 
   yOffset = yOffset - 90
 
+  -- Reset Position button (centers tile on screen)
+  local resetBtn = CreateFrame("Button", nil, scrollChild, "UIPanelButtonTemplate")
+  resetBtn:SetSize(120, 25)
+  resetBtn:SetPoint("TOPLEFT", 10, yOffset)
+  resetBtn:SetText("Reset Position")
+  resetBtn:SetScript("OnClick", function()
+    if SkyInfoTiles.GetActiveTiles then
+      local tiles = SkyInfoTiles.GetActiveTiles()
+      for _, tile in ipairs(tiles) do
+        if tile.key == tileKey or tile.type == tileType then
+          -- Center on screen with TOPLEFT anchor
+          local screenWidth = math.floor((GetScreenWidth and GetScreenWidth() or 1920) + 0.5)
+          local screenHeight = math.floor((GetScreenHeight and GetScreenHeight() or 1080) + 0.5)
+
+          tile.x = screenWidth / 2
+          tile.y = -screenHeight / 2
+
+          -- Update sliders
+          xPosSlider._programmaticChange = true
+          xPosSlider:SetValue(tile.x)
+          xPosSlider._programmaticChange = false
+          xPosEditBox:SetText(tostring(math.floor(tile.x)))
+          yPosSlider._programmaticChange = true
+          yPosSlider:SetValue(tile.y)
+          yPosSlider._programmaticChange = false
+          yPosEditBox:SetText(tostring(math.floor(tile.y)))
+          if SkyInfoTiles.Rebuild then
+            SkyInfoTiles.Rebuild()
+          end
+          break
+        end
+      end
+    end
+  end)
+
+  yOffset = yOffset - 35
+
   return {
     xPosSlider = xPosSlider,
     xPosEditBox = xPosEditBox,
     yPosSlider = yPosSlider,
     yPosEditBox = yPosEditBox,
+    resetBtn = resetBtn,
     newYOffset = yOffset
   }
 end
@@ -406,6 +519,7 @@ local function CreateOptionsWindow()
   CreateTab("Crosshair", 5)
   CreateTab("Clock", 6)
   CreateTab("Portals", 7)
+  CreateTab("Profiles", 8)
 
   -- Content area with subtle background (adjusted for 2 rows of tabs)
   local contentArea = CreateFrame("Frame", nil, f, "BackdropTemplate")
@@ -453,11 +567,11 @@ local function CreateOptionsWindow()
   local cleanBtn = CreateFrame("Button", nil, generalTab, "UIPanelButtonTemplate")
   cleanBtn:SetSize(150, 25)
   cleanBtn:SetPoint("TOPLEFT", 10, yOffset)
-  cleanBtn:SetText("Clean Duplicates")
+  cleanBtn:SetText("Clean Database")
   cleanBtn:SetScript("OnClick", function()
     if SkyInfoTiles.CleanProfile then
       SkyInfoTiles.CleanProfile()
-      print("|cff66ccffSkyInfoTiles:|r Cleaned duplicate tiles")
+      print("|cff66ccffSkyInfoTiles:|r Database cleaned")
     end
   end)
 
@@ -466,6 +580,44 @@ local function CreateOptionsWindow()
   currencyTab:SetAllPoints()
   currencyTab:Hide()
   tabContent[2] = currencyTab
+
+  local yOffset = -10
+
+  -- Lock checkbox
+  local lockCheck = CreateFrame("CheckButton", nil, generalTab, "UICheckButtonTemplate")
+  lockCheck:SetPoint("TOPLEFT", 10, yOffset)
+  lockCheck.Text:SetText("Lock tiles (prevent dragging)")
+  lockCheck:SetScript("OnClick", function(self)
+    SkyInfoTilesDB.locked = self:GetChecked()
+    SkyInfoTiles.ApplyLockState()
+  end)
+  generalTab.lockCheck = lockCheck
+  yOffset = yOffset - 30
+
+  -- Reset button
+  local resetBtn = CreateFrame("Button", nil, generalTab, "UIPanelButtonTemplate")
+  resetBtn:SetSize(150, 25)
+  resetBtn:SetPoint("TOPLEFT", 10, yOffset)
+  resetBtn:SetText("Reset All Settings")
+  resetBtn:SetScript("OnClick", function()
+    if SkyInfoTiles.ResetProfile then
+      SkyInfoTiles.ResetProfile()
+      print("|cff66ccffSkyInfoTiles:|r Settings reset to defaults")
+    end
+  end)
+  yOffset = yOffset - 35
+
+  -- Clean button
+  local cleanBtn = CreateFrame("Button", nil, generalTab, "UIPanelButtonTemplate")
+  cleanBtn:SetSize(150, 25)
+  cleanBtn:SetPoint("TOPLEFT", 10, yOffset)
+  cleanBtn:SetText("Clean Duplicates")
+  cleanBtn:SetScript("OnClick", function()
+    if SkyInfoTiles.CleanProfile then
+      SkyInfoTiles.CleanProfile()
+      print("|cff66ccffSkyInfoTiles:|r Cleaned duplicate tiles")
+    end
+  end)
 
   -- Enable Currency Tile checkbox
   local enableCurrencyCheck = CreateFrame("CheckButton", nil, currencyTab, "UICheckButtonTemplate")
@@ -615,14 +767,15 @@ local function CreateOptionsWindow()
 
       local cb = CreateFrame("CheckButton", nil, scrollChild, "UICheckButtonTemplate")
       cb:SetPoint("TOPLEFT", 10, y)
-      cb.Text:SetText(entry.label or ("Currency " .. entry.id))
+      local key = entry.id or entry.itemID
+      cb.Text:SetText(entry.label or ("Currency " .. tostring(key)))
       cb._isCurrencyCheck = true
 
       -- Load saved state (default = true for all)
-      local enabled = SkyInfoTilesDB.currencySettings[entry.id]
+      local enabled = SkyInfoTilesDB.currencySettings[key]
       if enabled == nil then
         enabled = true
-        SkyInfoTilesDB.currencySettings[entry.id] = true
+        SkyInfoTilesDB.currencySettings[key] = true
       end
 
       -- Set checked state BEFORE adding OnClick to prevent triggering refresh
@@ -630,7 +783,7 @@ local function CreateOptionsWindow()
 
       -- Add OnClick handler AFTER setting initial state
       cb:SetScript("OnClick", function(self)
-        SkyInfoTilesDB.currencySettings[entry.id] = self:GetChecked()
+        SkyInfoTilesDB.currencySettings[key] = self:GetChecked()
         -- Refresh currency tile
         if SkyInfoTiles.RefreshCurrencyTile then
           SkyInfoTiles.RefreshCurrencyTile()
@@ -842,7 +995,7 @@ local function CreateOptionsWindow()
         local tiles = SkyInfoTiles.GetActiveTiles()
         for _, tile in ipairs(tiles) do
           if tile.key == "keystone" or tile.type == "keystone" then
-            tile.point = "CENTER"  -- Always use CENTER for slider-based positioning
+            tile.point = "TOPLEFT"
             tile.x = value
             if SkyInfoTiles.Rebuild then
               SkyInfoTiles.Rebuild()
@@ -858,15 +1011,22 @@ local function CreateOptionsWindow()
     self:ClearFocus()
   end)
 
+  xPosSlider._programmaticChange = false
   xPosSlider:SetScript("OnValueChanged", function(self, value)
     local rounded = math.floor(value)
     _G[self:GetName() .. "Text"]:SetText(tostring(rounded))
     xPosEditBox:SetText(tostring(rounded))
+
+    -- Don't rebuild if this is a programmatic change from RefreshOptionsWindow
+    if self._programmaticChange then
+      return
+    end
+
     if SkyInfoTiles.GetActiveTiles then
       local tiles = SkyInfoTiles.GetActiveTiles()
       for _, tile in ipairs(tiles) do
         if tile.key == "keystone" or tile.type == "keystone" then
-          tile.point = "CENTER"  -- Always use CENTER for slider-based positioning
+          tile.point = "TOPLEFT"
           tile.x = rounded
           if SkyInfoTiles.Rebuild then
             SkyInfoTiles.Rebuild()
@@ -917,7 +1077,7 @@ local function CreateOptionsWindow()
         local tiles = SkyInfoTiles.GetActiveTiles()
         for _, tile in ipairs(tiles) do
           if tile.key == "keystone" or tile.type == "keystone" then
-            tile.point = "CENTER"  -- Always use CENTER for slider-based positioning
+            tile.point = "TOPLEFT"
             tile.y = value
             if SkyInfoTiles.Rebuild then
               SkyInfoTiles.Rebuild()
@@ -933,15 +1093,22 @@ local function CreateOptionsWindow()
     self:ClearFocus()
   end)
 
+  yPosSlider._programmaticChange = false
   yPosSlider:SetScript("OnValueChanged", function(self, value)
     local rounded = math.floor(value)
     _G[self:GetName() .. "Text"]:SetText(tostring(rounded))
     yPosEditBox:SetText(tostring(rounded))
+
+    -- Don't rebuild if this is a programmatic change from RefreshOptionsWindow
+    if self._programmaticChange then
+      return
+    end
+
     if SkyInfoTiles.GetActiveTiles then
       local tiles = SkyInfoTiles.GetActiveTiles()
       for _, tile in ipairs(tiles) do
         if tile.key == "keystone" or tile.type == "keystone" then
-          tile.point = "CENTER"  -- Always use CENTER for slider-based positioning
+          tile.point = "TOPLEFT"
           tile.y = rounded
           if SkyInfoTiles.Rebuild then
             SkyInfoTiles.Rebuild()
@@ -955,6 +1122,39 @@ local function CreateOptionsWindow()
   keystoneTab.yPosSlider = yPosSlider
   keystoneTab.yPosEditBox = yPosEditBox
   yOffset = yOffset - 90
+
+  -- Reset Position button
+  local resetPosBtn = CreateFrame("Button", nil, scrollChild, "UIPanelButtonTemplate")
+  resetPosBtn:SetSize(120, 25)
+  resetPosBtn:SetPoint("TOPLEFT", 10, yOffset)
+  resetPosBtn:SetText("Reset Position")
+  resetPosBtn:SetScript("OnClick", function()
+    if SkyInfoTiles.GetActiveTiles then
+      local tiles = SkyInfoTiles.GetActiveTiles()
+      for _, tile in ipairs(tiles) do
+        if tile.key == "keystone" or tile.type == "keystone" then
+          -- Center on screen with TOPLEFT anchor
+          local screenWidth = math.floor((GetScreenWidth and GetScreenWidth() or 1920) + 0.5)
+          local screenHeight = math.floor((GetScreenHeight and GetScreenHeight() or 1080) + 0.5)
+
+          tile.x = screenWidth / 2
+          tile.y = -screenHeight / 2
+
+          -- Update sliders
+          xPosSlider:SetValue(tile.x)
+          xPosEditBox:SetText(tostring(math.floor(tile.x)))
+          yPosSlider:SetValue(tile.y)
+          yPosEditBox:SetText(tostring(math.floor(tile.y)))
+          if SkyInfoTiles.Rebuild then
+            SkyInfoTiles.Rebuild()
+          end
+          break
+        end
+      end
+    end
+  end)
+
+  yOffset = yOffset - 35
 
   -- ========== STRATA ==========
   local strataLabel = scrollChild:CreateFontString(nil, "OVERLAY", "GameFontNormal")
@@ -2552,6 +2752,154 @@ local function CreateOptionsWindow()
   UIDropDownMenu_SetText(strataDropdown, "MEDIUM")
   dungeonTab.strataDropdown = strataDropdown
 
+  -- === TAB 8: PROFILES ===
+  local profilesTab = CreateFrame("Frame", nil, contentArea)
+  profilesTab:SetAllPoints()
+  profilesTab:Hide()
+  tabContent[8] = profilesTab
+
+  local yOffset = -10
+
+  -- Character info label
+  local charName = UnitName("player") or "Unknown"
+  local realmName = GetRealmName() or "Unknown"
+  local charKey = charName .. "-" .. realmName
+
+  local charLabel = profilesTab:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
+  charLabel:SetPoint("TOPLEFT", 10, yOffset)
+  charLabel:SetText("Profile for " .. charKey .. ":")
+  charLabel:SetTextColor(1, 0.82, 0, 1)
+  yOffset = yOffset - 30
+
+  -- Profile selection dropdown
+  local profileDropdown = CreateFrame("Frame", "SkyInfoTilesProfileDropdown", profilesTab, "UIDropDownMenuTemplate")
+  profileDropdown:SetPoint("TOPLEFT", 10, yOffset)
+
+  UIDropDownMenu_SetWidth(profileDropdown, 200)
+  UIDropDownMenu_Initialize(profileDropdown, function(self, level)
+    if not SkyInfoTiles.GetActiveProfileName or not SkyInfoTiles.ListProfiles then
+      return
+    end
+
+    local activeProfile = SkyInfoTiles.GetActiveProfileName()
+    local profiles = SkyInfoTiles.ListProfiles()
+
+    if not profiles or #profiles == 0 then
+      -- Add a default entry if no profiles exist
+      local info = UIDropDownMenu_CreateInfo()
+      info.text = "Default"
+      info.value = "Default"
+      info.checked = true
+      info.func = function() end
+      UIDropDownMenu_AddButton(info, level)
+      return
+    end
+
+    for _, name in ipairs(profiles) do
+      local info = UIDropDownMenu_CreateInfo()
+      info.text = name == "Default" and name .. " (Default)" or name
+      info.value = name
+      info.checked = (name == activeProfile)
+      info.func = function()
+        local success, err = SkyInfoTiles.SetActiveProfile(name)
+        if success then
+          UIDropDownMenu_SetText(profileDropdown, info.text)
+          if SkyInfoTiles._OptionsRefresh then
+            SkyInfoTiles._OptionsRefresh()
+          end
+        else
+          print("|cff66ccffSkyInfoTiles:|r " .. tostring(err))
+        end
+      end
+      UIDropDownMenu_AddButton(info, level)
+    end
+  end)
+
+  -- Set initial text
+  if SkyInfoTiles.GetActiveProfileName then
+    local activeProfile = SkyInfoTiles.GetActiveProfileName()
+    local displayText = activeProfile == "Default" and "Default (Default)" or activeProfile
+    UIDropDownMenu_SetText(profileDropdown, displayText)
+  else
+    UIDropDownMenu_SetText(profileDropdown, "Default")
+  end
+
+  profilesTab.profileDropdown = profileDropdown
+  yOffset = yOffset - 50
+
+  -- Separator
+  local sep1 = profilesTab:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+  sep1:SetPoint("TOPLEFT", 10, yOffset)
+  sep1:SetText("-----------------------------------")
+  sep1:SetTextColor(0.5, 0.5, 0.5, 1)
+  yOffset = yOffset - 30
+
+  -- Manage profiles label
+  local manageLabel = profilesTab:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
+  manageLabel:SetPoint("TOPLEFT", 10, yOffset)
+  manageLabel:SetText("Manage Global Profiles:")
+  manageLabel:SetTextColor(1, 0.82, 0, 1)
+  yOffset = yOffset - 30
+
+  -- Profile list label
+  local listLabel = profilesTab:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+  listLabel:SetPoint("TOPLEFT", 10, yOffset)
+  listLabel:SetText("Available Profiles:")
+  yOffset = yOffset - 25
+
+  -- Profile list (simple text list)
+  local profileListText = profilesTab:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+  profileListText:SetPoint("TOPLEFT", 20, yOffset)
+  profileListText:SetJustifyH("LEFT")
+  profileListText:SetWidth(300)
+  profileListText:SetText("Loading...")
+  profilesTab.profileListText = profileListText
+  yOffset = yOffset - 100
+
+  -- Profile management buttons
+  local buttonY = yOffset
+
+  -- New Profile button
+  local newBtn = CreateFrame("Button", nil, profilesTab, "UIPanelButtonTemplate")
+  newBtn:SetSize(100, 25)
+  newBtn:SetPoint("TOPLEFT", 10, buttonY)
+  newBtn:SetText("New")
+  newBtn:SetScript("OnClick", function()
+    -- Open dialog for new profile
+    StaticPopup_Show("SKYINFOTILES_NEW_PROFILE")
+  end)
+
+  -- Rename Profile button
+  local renameBtn = CreateFrame("Button", nil, profilesTab, "UIPanelButtonTemplate")
+  renameBtn:SetSize(100, 25)
+  renameBtn:SetPoint("LEFT", newBtn, "RIGHT", 10, 0)
+  renameBtn:SetText("Rename")
+  renameBtn:SetScript("OnClick", function()
+    local activeProfile = SkyInfoTiles.GetActiveProfileName()
+    if activeProfile == "Default" then
+      print("|cff66ccffSkyInfoTiles:|r Cannot rename Default profile")
+      return
+    end
+    StaticPopup_Show("SKYINFOTILES_RENAME_PROFILE", activeProfile, nil, activeProfile)
+  end)
+
+  -- Delete Profile button
+  local deleteBtn = CreateFrame("Button", nil, profilesTab, "UIPanelButtonTemplate")
+  deleteBtn:SetSize(100, 25)
+  deleteBtn:SetPoint("LEFT", renameBtn, "RIGHT", 10, 0)
+  deleteBtn:SetText("Delete")
+  deleteBtn:SetScript("OnClick", function()
+    local activeProfile = SkyInfoTiles.GetActiveProfileName()
+    if activeProfile == "Default" then
+      print("|cff66ccffSkyInfoTiles:|r Cannot delete Default profile")
+      return
+    end
+    StaticPopup_Show("SKYINFOTILES_DELETE_PROFILE", activeProfile, nil, activeProfile)
+  end)
+
+  profilesTab.renameBtn = renameBtn
+  profilesTab.deleteBtn = deleteBtn
+
   -- Show first tab by default and layout tabs
   tabs[1]:Click()
   if f.LayoutTabs then f.LayoutTabs() end
@@ -2567,7 +2915,7 @@ end
 -- Refresh function (called when settings change externally)
 local function RefreshOptionsWindow()
   local f = optionsFrame
-  if not f or not f:IsShown() then return end
+  if not f then return end
 
   -- Refresh general tab checkboxes
   if f.tabContent and f.tabContent[1] and f.tabContent[1].lockCheck then
@@ -2790,6 +3138,44 @@ local function RefreshOptionsWindow()
       UIDropDownMenu_SetText(f.tabContent[tileInfo.index].strataDropdown, strata)
     end
   end
+
+  -- Refresh Profiles tab (tab 8)
+  if f.tabContent and f.tabContent[8] then
+    local profilesTab = f.tabContent[8]
+
+    -- Update profile dropdown
+    if profilesTab.profileDropdown and SkyInfoTiles.GetActiveProfileName then
+      local activeProfile = SkyInfoTiles.GetActiveProfileName()
+      local displayText = activeProfile == "Default" and "Default (Default)" or activeProfile
+      UIDropDownMenu_SetText(profilesTab.profileDropdown, displayText)
+    end
+
+    -- Update profile list
+    if profilesTab.profileListText and SkyInfoTiles.ListProfiles then
+      local profiles = SkyInfoTiles.ListProfiles()
+      local activeProfile = SkyInfoTiles.GetActiveProfileName()
+      local listText = ""
+      for _, name in ipairs(profiles) do
+        local marker = (name == activeProfile) and "* " or "  "
+        local suffix = (name == "Default") and " (Default)" or ""
+        listText = listText .. marker .. name .. suffix .. "\n"
+      end
+      profilesTab.profileListText:SetText(listText)
+    end
+
+    -- Enable/disable Rename and Delete buttons based on active profile
+    if profilesTab.renameBtn and profilesTab.deleteBtn and SkyInfoTiles.GetActiveProfileName then
+      local activeProfile = SkyInfoTiles.GetActiveProfileName()
+      local isDefault = (activeProfile == "Default")
+      if isDefault then
+        profilesTab.renameBtn:Disable()
+        profilesTab.deleteBtn:Disable()
+      else
+        profilesTab.renameBtn:Enable()
+        profilesTab.deleteBtn:Enable()
+      end
+    end
+  end
 end
 
 -- Export refresh function
@@ -2801,383 +3187,8 @@ function SkyInfoTiles.ToggleOptionsWindow()
   if f:IsShown() then
     f:Hide()
   else
-    -- Refresh hide label checkbox for currencies (but don't repopulate currency list)
-    if f.tabContent and f.tabContent[2] and f.tabContent[2].hideLabelCheck then
-      local hideLabel = false
-      if SkyInfoTiles.GetActiveTiles then
-        local tiles = SkyInfoTiles.GetActiveTiles()
-        for _, tile in ipairs(tiles) do
-          if tile.key == "currencies" or tile.type == "currencies" then
-            hideLabel = tile.hideLabel or false
-            break
-          end
-        end
-      end
-      f.tabContent[2].hideLabelCheck._programmaticChange = true
-      f.tabContent[2].hideLabelCheck:SetChecked(hideLabel)
-      f.tabContent[2].hideLabelCheck._programmaticChange = false
-    end
-    -- Refresh general tab checkboxes
-    if f.tabContent and f.tabContent[1] and f.tabContent[1].lockCheck then
-      f.tabContent[1].lockCheck:SetChecked(SkyInfoTilesDB.locked or false)
-    end
-    -- Refresh all tile enable checkboxes
-    local tileKeys = {
-      [2] = "currencies",
-      [3] = "keystone",
-      [4] = "charstats",
-      [5] = "crosshair",
-      [6] = "clock",
-      [7] = "dungeonports"
-    }
-
-    for tabIndex, tileKey in pairs(tileKeys) do
-      if f.tabContent and f.tabContent[tabIndex] and f.tabContent[tabIndex].enableCheck then
-        local enabled = true -- Default
-        if SkyInfoTiles.GetActiveTiles then
-          local tiles = SkyInfoTiles.GetActiveTiles()
-          for _, tile in ipairs(tiles) do
-            if tile.key == tileKey or tile.type == tileKey then
-              enabled = (tile.enabled ~= false)
-              break
-            end
-          end
-        end
-        local checkbox = f.tabContent[tabIndex].enableCheck
-        checkbox._programmaticChange = true
-        checkbox:SetChecked(enabled)
-        checkbox._programmaticChange = false
-      end
-    end
-
-    -- Refresh keystone settings
-    if f.tabContent and f.tabContent[3] then
-      local keystoneTab = f.tabContent[3]
-      local scale = 1.0
-      local xPos = 0
-      local yPos = 0
-      local showBackground = false
-      local useClassColor = false
-      local backgroundColor = { r = 0, g = 0, b = 0, a = 0.8 }
-      local showBorder = false
-      local borderColor = { r = 1, g = 1, b = 1, a = 1 }
-      local borderThickness = 2
-
-      if SkyInfoTiles.GetActiveTiles then
-        local tiles = SkyInfoTiles.GetActiveTiles()
-        for _, tile in ipairs(tiles) do
-          if tile.key == "keystone" or tile.type == "keystone" then
-            scale = tile.scale or 1.0
-            xPos = tile.x or 0
-            yPos = tile.y or 0
-            showBackground = tile.showBackground or false
-            useClassColor = tile.useClassColor or false
-            backgroundColor = tile.backgroundColor or backgroundColor
-            showBorder = tile.showBorder or false
-            borderColor = tile.borderColor or borderColor
-            borderThickness = tile.borderThickness or 2
-            break
-          end
-        end
-      end
-
-      if keystoneTab.scaleSlider then
-        keystoneTab.scaleSlider:SetValue(scale)
-        _G[keystoneTab.scaleSlider:GetName() .. "Text"]:SetText(string.format("%.0f%%", scale * 100))
-      end
-      if keystoneTab.scaleEditBox then
-        keystoneTab.scaleEditBox:SetText(tostring(math.floor(scale * 100)))
-      end
-      if keystoneTab.xPosSlider then
-        keystoneTab.xPosSlider._programmaticChange = true
-        keystoneTab.xPosSlider:SetValue(xPos)
-        keystoneTab.xPosSlider._programmaticChange = false
-        _G[keystoneTab.xPosSlider:GetName() .. "Text"]:SetText(tostring(math.floor(xPos)))
-      end
-      if keystoneTab.xPosEditBox then
-        keystoneTab.xPosEditBox:SetText(tostring(math.floor(xPos)))
-      end
-      if keystoneTab.yPosSlider then
-        keystoneTab.yPosSlider._programmaticChange = true
-        keystoneTab.yPosSlider:SetValue(yPos)
-        keystoneTab.yPosSlider._programmaticChange = false
-        _G[keystoneTab.yPosSlider:GetName() .. "Text"]:SetText(tostring(math.floor(yPos)))
-      end
-      if keystoneTab.yPosEditBox then
-        keystoneTab.yPosEditBox:SetText(tostring(math.floor(yPos)))
-      end
-      if keystoneTab.bgEnableCheck then
-        keystoneTab.bgEnableCheck._programmaticChange = true
-        keystoneTab.bgEnableCheck:SetChecked(showBackground)
-        keystoneTab.bgEnableCheck._programmaticChange = false
-      end
-      if keystoneTab.useClassColorCheck then
-        keystoneTab.useClassColorCheck._programmaticChange = true
-        keystoneTab.useClassColorCheck:SetChecked(useClassColor)
-        keystoneTab.useClassColorCheck._programmaticChange = false
-      end
-      if keystoneTab.bgColorSwatch then
-        keystoneTab.bgColorSwatch:SetColorTexture(backgroundColor.r, backgroundColor.g, backgroundColor.b, backgroundColor.a)
-      end
-      -- Enable/disable color picker based on useClassColor
-      if keystoneTab.bgColorButton then
-        if useClassColor then
-          keystoneTab.bgColorButton:Disable()
-        else
-          keystoneTab.bgColorButton:Enable()
-        end
-      end
-      if keystoneTab.bgColorLabel then
-        if useClassColor then
-          keystoneTab.bgColorLabel:SetTextColor(0.5, 0.5, 0.5, 1)
-        else
-          keystoneTab.bgColorLabel:SetTextColor(1, 1, 1, 1)
-        end
-      end
-      if keystoneTab.borderEnableCheck then
-        keystoneTab.borderEnableCheck._programmaticChange = true
-        keystoneTab.borderEnableCheck:SetChecked(showBorder)
-        keystoneTab.borderEnableCheck._programmaticChange = false
-      end
-      if keystoneTab.borderColorSwatch then
-        keystoneTab.borderColorSwatch:SetColorTexture(borderColor.r, borderColor.g, borderColor.b, borderColor.a)
-      end
-      if keystoneTab.borderThicknessSlider then
-        keystoneTab.borderThicknessSlider:SetValue(borderThickness)
-        _G[keystoneTab.borderThicknessSlider:GetName() .. "Text"]:SetText(tostring(borderThickness))
-      end
-    end
-
-    -- Refresh clock font and size
-    if f.tabContent and f.tabContent[6] then
-      local clockFont = "Fonts\\FRIZQT__.ttf" -- Default
-      local clockSize = 24 -- Default
-      if SkyInfoTiles.GetActiveTiles then
-        local tiles = SkyInfoTiles.GetActiveTiles()
-        for _, tile in ipairs(tiles) do
-          if tile.key == "clock" or tile.type == "clock" then
-            clockFont = tile.font or "Fonts\\FRIZQT__.ttf"
-            clockSize = tile.fontSize or tile.size or 24
-            break
-          end
-        end
-      end
-
-      -- Update font dropdown
-      if f.tabContent[6].fontDropdown then
-        -- Try to get font name from discovered fonts
-        local fontName = nil
-        if f.tabContent[6].GetFontOptions then
-          local opts = f.tabContent[6].GetFontOptions()
-          for _, opt in ipairs(opts) do
-            if opt.path == clockFont then
-              fontName = opt.name
-              break
-            end
-          end
-        end
-
-        -- Fallback: show path if font not found in list
-        if not fontName then
-          fontName = clockFont:match("([^\\]+)$") or clockFont
-        end
-
-        UIDropDownMenu_SetText(f.tabContent[6].fontDropdown, fontName)
-      end
-
-      -- Update size slider
-      if f.tabContent[6].sizeSlider then
-        f.tabContent[6].sizeSlider:SetValue(clockSize)
-        _G[f.tabContent[6].sizeSlider:GetName() .. "Text"]:SetText(tostring(clockSize))
-      end
-    end
-
-    -- Refresh crosshair size, thickness, color, outline thickness, and outline color
-    if f.tabContent and f.tabContent[5] then
-      local crosshairSize = 32 -- Default
-      local crosshairThickness = 2 -- Default
-      local crosshairColor = { r = 1, g = 0, b = 0, a = 0.9 } -- Default red
-      local crosshairOutlineThickness = 0 -- Default
-      local crosshairOutlineColor = { r = 0, g = 0, b = 0, a = 1 } -- Default black
-      if SkyInfoTiles.GetActiveTiles then
-        local tiles = SkyInfoTiles.GetActiveTiles()
-        for _, tile in ipairs(tiles) do
-          if tile.key == "crosshair" or tile.type == "crosshair" then
-            crosshairSize = tile.size or 32
-            crosshairThickness = tile.thickness or 2
-            crosshairOutlineThickness = tile.outlineThickness or 0
-            if tile.color then
-              crosshairColor = tile.color
-            end
-            if tile.outlineColor then
-              crosshairOutlineColor = tile.outlineColor
-            end
-            break
-          end
-        end
-      end
-
-      -- Update size slider
-      if f.tabContent[5].sizeSlider then
-        f.tabContent[5].sizeSlider:SetValue(crosshairSize)
-        _G[f.tabContent[5].sizeSlider:GetName() .. "Text"]:SetText(tostring(crosshairSize))
-      end
-
-      -- Update thickness slider
-      if f.tabContent[5].thicknessSlider then
-        f.tabContent[5].thicknessSlider:SetValue(crosshairThickness)
-        _G[f.tabContent[5].thicknessSlider:GetName() .. "Text"]:SetText(tostring(crosshairThickness))
-      end
-
-      -- Update color swatch
-      if f.tabContent[5].colorSwatch then
-        f.tabContent[5].colorSwatch:SetColorTexture(crosshairColor.r, crosshairColor.g, crosshairColor.b, crosshairColor.a)
-      end
-
-      -- Update outline thickness slider
-      if f.tabContent[5].outlineThicknessSlider then
-        f.tabContent[5].outlineThicknessSlider:SetValue(crosshairOutlineThickness)
-        _G[f.tabContent[5].outlineThicknessSlider:GetName() .. "Text"]:SetText(tostring(crosshairOutlineThickness))
-      end
-
-      -- Update outline color swatch
-      if f.tabContent[5].outlineColorSwatch then
-        f.tabContent[5].outlineColorSwatch:SetColorTexture(crosshairOutlineColor.r, crosshairOutlineColor.g, crosshairOutlineColor.b, crosshairOutlineColor.a)
-      end
-    end
-
-    -- Refresh char stats order list and font settings
-    if f.tabContent and f.tabContent[4] then
-      if f.tabContent[4].RebuildStatList then
-        f.tabContent[4].RebuildStatList()
-      end
-
-      -- Refresh font settings
-      local hideTitle = false
-      local showTertiary = false
-      local titleSize = 14
-      local lineSize = 12
-      if SkyInfoTiles.GetActiveTiles then
-        local tiles = SkyInfoTiles.GetActiveTiles()
-        for _, tile in ipairs(tiles) do
-          if tile.key == "charstats" or tile.type == "charstats" then
-            hideTitle = tile.hideTitle or false
-            showTertiary = tile.showTertiary or false
-            titleSize = tile.titleSize or 14
-            lineSize = tile.lineSize or 12
-            break
-          end
-        end
-      end
-
-      -- Update hide title checkbox
-      if f.tabContent[4].hideTitleCheck then
-        f.tabContent[4].hideTitleCheck:SetChecked(hideTitle)
-      end
-
-      -- Update show tertiary stats checkbox
-      if f.tabContent[4].showTertiaryCheck then
-        f.tabContent[4].showTertiaryCheck:SetChecked(showTertiary)
-      end
-
-      -- Update title size slider
-      if f.tabContent[4].titleSizeSlider then
-        f.tabContent[4].titleSizeSlider:SetValue(titleSize)
-        _G[f.tabContent[4].titleSizeSlider:GetName() .. "Text"]:SetText(tostring(titleSize))
-      end
-
-      -- Update line size slider
-      if f.tabContent[4].lineSizeSlider then
-        f.tabContent[4].lineSizeSlider:SetValue(lineSize)
-        _G[f.tabContent[4].lineSizeSlider:GetName() .. "Text"]:SetText(tostring(lineSize))
-      end
-    end
-
-    -- Refresh dungeon ports orientation dropdown
-    if f.tabContent and f.tabContent[7] and f.tabContent[7].orientDropdown then
-      local orientation = "horizontal" -- Default
-      if SkyInfoTiles.GetActiveTiles then
-        local tiles = SkyInfoTiles.GetActiveTiles()
-        for _, tile in ipairs(tiles) do
-          if tile.key == "dungeonports" or tile.type == "dungeonports" then
-            orientation = tile.orientation or "horizontal"
-            break
-          end
-        end
-      end
-      UIDropDownMenu_SetText(f.tabContent[7].orientDropdown, orientation == "horizontal" and "Horizontal" or "Vertical")
-    end
-
-    -- Refresh position sliders for all tiles
-    local tilesWithPosition = {
-      {index = 2, key = "currencies"},
-      {index = 4, key = "charstats"},
-      {index = 6, key = "clock"},
-      {index = 7, key = "dungeonports"}
-    }
-
-    for _, tileInfo in ipairs(tilesWithPosition) do
-      if f.tabContent and f.tabContent[tileInfo.index] then
-        local tab = f.tabContent[tileInfo.index]
-        local xPos = 0
-        local yPos = 0
-
-        if SkyInfoTiles.GetActiveTiles then
-          local tiles = SkyInfoTiles.GetActiveTiles()
-          for _, tile in ipairs(tiles) do
-            if tile.key == tileInfo.key or tile.type == tileInfo.key then
-              xPos = tile.x or 0
-              yPos = tile.y or 0
-              break
-            end
-          end
-        end
-
-        if tab.xPosSlider then
-          tab.xPosSlider:SetValue(xPos)
-          _G[tab.xPosSlider:GetName() .. "Text"]:SetText(tostring(math.floor(xPos)))
-        end
-        if tab.xPosEditBox then
-          tab.xPosEditBox:SetText(tostring(math.floor(xPos)))
-        end
-        if tab.yPosSlider then
-          tab.yPosSlider:SetValue(yPos)
-          _G[tab.yPosSlider:GetName() .. "Text"]:SetText(tostring(math.floor(yPos)))
-        end
-        if tab.yPosEditBox then
-          tab.yPosEditBox:SetText(tostring(math.floor(yPos)))
-        end
-      end
-    end
-
-    -- Refresh strata dropdowns for all tiles
-    local tilesWithStrata = {
-      {index = 2, key = "currencies"},
-      {index = 3, key = "keystone"},
-      {index = 4, key = "charstats"},
-      {index = 5, key = "crosshair"},
-      {index = 6, key = "clock"},
-      {index = 7, key = "dungeonports"}
-    }
-
-    for _, tileInfo in ipairs(tilesWithStrata) do
-      if f.tabContent and f.tabContent[tileInfo.index] and f.tabContent[tileInfo.index].strataDropdown then
-        local strata = "MEDIUM" -- Default
-
-        if SkyInfoTiles.GetActiveTiles then
-          local tiles = SkyInfoTiles.GetActiveTiles()
-          for _, tile in ipairs(tiles) do
-            if tile.key == tileInfo.key or tile.type == tileInfo.key then
-              strata = tile.strata or "MEDIUM"
-              break
-            end
-          end
-        end
-
-        UIDropDownMenu_SetText(f.tabContent[tileInfo.index].strataDropdown, strata)
-      end
-    end
-
+    -- Refresh all UI elements
+    RefreshOptionsWindow()
     f:Show()
   end
 end

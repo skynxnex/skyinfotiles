@@ -35,6 +35,14 @@ local CURRENCIES = {
   { id = 3343, label = "Champion Dawncrest" },
   { id = 3341, label = "Veteran Dawncrest" },
   { id = 3383, label = "Adventurer Dawncrest" },
+
+  -- Separator
+  { separator = true },
+
+  -- Bag Items
+  { itemID = 268552, label = "Ascendant Voidcore" },
+  { itemID = 268650, label = "Ascendant Voidshard" },
+  { itemID = 258556, label = "Thalassian Token of Merit" },
 }
 
 -- Export currency list for OptionsWindow
@@ -57,8 +65,9 @@ local function GetActiveCurrencyEntries()
         lastWasSeparator = true
       end
     else
-      -- Check if currency is enabled (default = true)
-      local enabled = SkyInfoTilesDB.currencySettings[entry.id]
+      -- Check if currency/item is enabled (default = true)
+      local key = entry.id or entry.itemID
+      local enabled = SkyInfoTilesDB.currencySettings[key]
       if enabled == nil then enabled = true end -- Default to enabled
 
       if enabled then
@@ -139,6 +148,23 @@ local function BuildLine(entry, cfg)
   end
 
   local qty, iconID, cid, label
+
+  -- Handle bag items (itemID instead of currency id)
+  if entry.itemID then
+    qty = C_Item.GetItemCount(entry.itemID, true) or 0 -- true = include bank
+    iconID = C_Item.GetItemIconByID(entry.itemID)
+    label = entry.label
+
+    -- Compose text
+    local text
+    if cfg and cfg.hideLabel then
+      text = string.format("%d", qty)
+    else
+      text = string.format("%s: %d", label or ("Item " .. tostring(entry.itemID)), qty)
+    end
+
+    return text, iconID, false
+  end
 
   -- Prefer ID-based read when provided (more robust across seasons/locales)
   if entry.id and C_CurrencyInfo and C_CurrencyInfo.GetCurrencyInfo then
@@ -277,14 +303,37 @@ local function RebuildRows(f, cfg)
       rowFrame:EnableMouse(true)
       rowFrame._entry = entry
 
+      -- Propagate drag to parent frame for unlocked movement
+      rowFrame:RegisterForDrag("LeftButton")
+      rowFrame:SetScript("OnDragStart", function(self)
+        if f.StartMoving then
+          f:StartMoving()
+        end
+      end)
+      rowFrame:SetScript("OnDragStop", function(self)
+        if f.StopMovingOrSizing then
+          f:StopMovingOrSizing()
+        end
+        -- Trigger parent's OnDragStop to save position
+        if f:GetScript("OnDragStop") then
+          f:GetScript("OnDragStop")(f)
+        end
+      end)
+
       -- Tooltip on hover
       rowFrame:SetScript("OnEnter", function(self)
         if not self._entry then return end
-        local currencyID = self._entry.id
-        if not currencyID then return end
 
         GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
-        GameTooltip:SetCurrencyByID(currencyID)
+
+        -- Handle bag items
+        if self._entry.itemID then
+          GameTooltip:SetItemByID(self._entry.itemID)
+        -- Handle currencies
+        elseif self._entry.id then
+          GameTooltip:SetCurrencyByID(self._entry.id)
+        end
+
         GameTooltip:Show()
       end)
 
@@ -343,11 +392,12 @@ function API.create(parent, cfg)
   f:RegisterEvent("PLAYER_ENTERING_WORLD")
   f:RegisterEvent("PLAYER_LEVEL_UP")
   f:RegisterEvent("CURRENCY_DISPLAY_UPDATE")
+  f:RegisterEvent("BAG_UPDATE_DELAYED")  -- For bag items
 
-  -- Throttle update calls (CURRENCY_DISPLAY_UPDATE can spam)
+  -- Throttle update calls (CURRENCY_DISPLAY_UPDATE and BAG_UPDATE_DELAYED can spam)
   f._updateThrottle = -1  -- Initialize to -1 to allow first update
   f:SetScript("OnEvent", function(self, event)
-    if event == "CURRENCY_DISPLAY_UPDATE" then
+    if event == "CURRENCY_DISPLAY_UPDATE" or event == "BAG_UPDATE_DELAYED" then
       local now = GetTime and GetTime() or 0
       if self._updateThrottle > 0 and (now - self._updateThrottle) < 0.1 then
         return  -- Throttle only after first update

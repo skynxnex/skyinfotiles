@@ -24,10 +24,8 @@ local DEFAULTS = {
   scope       = "char",  -- "char" or "warband" (some tiles care about this)
   tiles       = {},      -- legacy; migrated into profiles.Default.tiles
   fontOutline = "OUTLINE",
-  profile     = "Default",
   profiles    = { Default = { tiles = {} } },
-  enableSpecProfiles = false, -- master toggle to use per-spec profile mapping
-  specProfiles = {}, -- map [specID] = "ProfileName"
+  characterProfiles = {}, -- map ["CharName-Realm"] = "ProfileName"
 }
 
 -- === UI helpers (global) ===
@@ -163,29 +161,25 @@ local TILE_TYPES = {}
 function SkyInfoTiles.RegisterTileType(name, api) TILE_TYPES[name] = api end
 
 -- ===== Profiles & Active tiles helpers =====
-local function GetActiveSpecID()
-  if type(_G.GetSpecialization) == "function" and type(_G.GetSpecializationInfo) == "function" then
-    local idx = _G.GetSpecialization()
-    if idx then
-      local id = _G.GetSpecializationInfo(idx)
-      if type(id) == "number" then return id end
-    end
-  end
-  return nil
+local function GetCharacterKey()
+  local name = UnitName("player")
+  local realm = GetRealmName()
+  return name .. "-" .. realm
 end
 
 function SkyInfoTiles.GetActiveProfileName()
   SkyInfoTilesDB = SkyInfoTilesDB or {}
-  local base = SkyInfoTilesDB.profile or "Default"
-  local enabledSpec = SkyInfoTilesDB.enableSpecProfiles and true or false
-  if enabledSpec then
-    local specId = GetActiveSpecID()
-    local map = SkyInfoTilesDB.specProfiles
-    if type(map) == "table" and specId and type(map[specId]) == "string" and map[specId] ~= "" then
-      return map[specId]
-    end
+  SkyInfoTilesDB.characterProfiles = SkyInfoTilesDB.characterProfiles or {}
+
+  local charKey = GetCharacterKey()
+  local profileName = SkyInfoTilesDB.characterProfiles[charKey]
+
+  -- Om ingen profil vald eller profilen inte finns, använd Default
+  if not profileName or not SkyInfoTilesDB.profiles or not SkyInfoTilesDB.profiles[profileName] then
+    profileName = "Default"
   end
-  return base
+
+  return profileName
 end
 
 local function GetOrCreateProfile(name)
@@ -222,7 +216,7 @@ function SkyInfoTiles.GetOrCreateTileCfg(key)
   local tiles = SkyInfoTiles.GetActiveTiles()
   for _, t in ipairs(tiles) do if t.key == key then cfg = t; break end end
   if not cfg then
-    cfg = { key = cat.key, type = cat.type, label = cat.label, enabled = (cat.defaultEnabled ~= false), point = "CENTER", x = 0, y = 0, strata = "MEDIUM" }
+    cfg = { key = cat.key, type = cat.type, label = cat.label, enabled = (cat.defaultEnabled ~= false), point = "TOPLEFT", x = 0, y = 0, strata = "MEDIUM" }
     table.insert(tiles, cfg)
   end
   return cfg
@@ -249,7 +243,7 @@ local function EnsureTileExistsForCatInTiles(tiles, cat)
   cfg = {
     key = cat.key, type = cat.type, label = cat.label,
     enabled = (cat.defaultEnabled ~= false),
-    point = "CENTER", x = 0, y = 0, strata = "MEDIUM",
+    point = "TOPLEFT", x = 0, y = 0, strata = "MEDIUM",
   }
   table.insert(tiles, cfg)
   return cfg
@@ -291,6 +285,131 @@ function SkyInfoTiles.SetTileEnabledByKeyForProfile(profileName, key, enabled)
   -- this prevents the checkbox from being reset by a mid-click refresh.
 end
 
+-- ===== Profile Management Functions =====
+
+function SkyInfoTiles.SetActiveProfile(profileName)
+  local charKey = GetCharacterKey()
+
+  -- Validera att profilen finns
+  if not SkyInfoTilesDB.profiles[profileName] then
+    return false, "Profile does not exist"
+  end
+
+  -- Spara per-karaktär val
+  SkyInfoTilesDB.characterProfiles[charKey] = profileName
+
+  -- Rebuild tiles
+  SkyInfoTiles.Rebuild()
+  SkyInfoTiles.UpdateAll()
+  if SkyInfoTiles._OptionsRefresh then SkyInfoTiles._OptionsRefresh() end
+
+  return true
+end
+
+function SkyInfoTiles.CreateProfile(name, copyFrom)
+  if not name or name == "" then
+    return false, "Profile name cannot be empty"
+  end
+
+  if SkyInfoTilesDB.profiles[name] then
+    return false, "Profile already exists"
+  end
+
+  -- If no copyFrom specified, copy from current active profile
+  if not copyFrom then
+    copyFrom = SkyInfoTiles.GetActiveProfileName()
+  end
+
+  if copyFrom and SkyInfoTilesDB.profiles[copyFrom] then
+    -- Kopiera tiles från befintlig profil
+    SkyInfoTilesDB.profiles[name] = { tiles = deepcopy(SkyInfoTilesDB.profiles[copyFrom].tiles) }
+  else
+    -- Fallback: skapa tom profil
+    SkyInfoTilesDB.profiles[name] = { tiles = {} }
+  end
+
+  if SkyInfoTiles._OptionsRefresh then SkyInfoTiles._OptionsRefresh() end
+  return true
+end
+
+function SkyInfoTiles.RenameProfile(oldName, newName)
+  if oldName == "Default" then
+    return false, "Cannot rename Default profile"
+  end
+
+  if not newName or newName == "" then
+    return false, "New profile name cannot be empty"
+  end
+
+  if not SkyInfoTilesDB.profiles[oldName] then
+    return false, "Profile does not exist"
+  end
+
+  if SkyInfoTilesDB.profiles[newName] then
+    return false, "A profile with that name already exists"
+  end
+
+  -- Kopiera profil till nytt namn
+  SkyInfoTilesDB.profiles[newName] = SkyInfoTilesDB.profiles[oldName]
+  SkyInfoTilesDB.profiles[oldName] = nil
+
+  -- Uppdatera alla karaktärer som använde gamla namnet
+  for charKey, profName in pairs(SkyInfoTilesDB.characterProfiles) do
+    if profName == oldName then
+      SkyInfoTilesDB.characterProfiles[charKey] = newName
+    end
+  end
+
+  if SkyInfoTiles._OptionsRefresh then SkyInfoTiles._OptionsRefresh() end
+  return true
+end
+
+function SkyInfoTiles.DeleteProfile(name)
+  if name == "Default" then
+    return false, "Cannot delete Default profile"
+  end
+
+  if not SkyInfoTilesDB.profiles[name] then
+    return false, "Profile does not exist"
+  end
+
+  -- Sätt alla karaktärer som använder denna profil till Default
+  for charKey, profName in pairs(SkyInfoTilesDB.characterProfiles) do
+    if profName == name then
+      SkyInfoTilesDB.characterProfiles[charKey] = "Default"
+    end
+  end
+
+  SkyInfoTilesDB.profiles[name] = nil
+
+  -- Om nuvarande karaktär använde denna profil, rebuild
+  local currentProfile = SkyInfoTiles.GetActiveProfileName()
+  if currentProfile == "Default" then
+    SkyInfoTiles.Rebuild()
+    SkyInfoTiles.UpdateAll()
+  end
+
+  if SkyInfoTiles._OptionsRefresh then SkyInfoTiles._OptionsRefresh() end
+  return true
+end
+
+function SkyInfoTiles.ListProfiles()
+  SkyInfoTilesDB = SkyInfoTilesDB or {}
+  SkyInfoTilesDB.profiles = SkyInfoTilesDB.profiles or {}
+
+  -- Ensure Default profile exists
+  if not SkyInfoTilesDB.profiles.Default then
+    SkyInfoTilesDB.profiles.Default = { tiles = {} }
+  end
+
+  local list = {}
+  for name, _ in pairs(SkyInfoTilesDB.profiles) do
+    table.insert(list, name)
+  end
+  table.sort(list)
+  return list
+end
+
 -- ===== DB helpers (by key) =====
 local function FindCatByType(t)
   for _, cat in ipairs(CATALOG) do if cat.type == t then return cat end end
@@ -314,7 +433,7 @@ local function EnsureTileExistsForCat(cat)
   cfg = {
     key = cat.key, type = cat.type, label = cat.label,
     enabled = (cat.defaultEnabled ~= false),
-    point = "CENTER", x = 0, y = 0,
+    point = "TOPLEFT", x = 0, y = 0,
   }
   local tiles = SkyInfoTiles.GetActiveTiles()
   table.insert(tiles, cfg)
@@ -480,17 +599,16 @@ local function SetMovable(f)
       local function StopDragging(self)
         if self.StopMovingOrSizing then self:StopMovingOrSizing() end
         if self._cfg then
-          -- Convert to CENTER-based coordinates for all tiles except crosshair (for consistency with sliders)
+          -- Convert to TOPLEFT-based coordinates for all tiles except crosshair
           if self._cfg.key ~= "crosshair" and self._cfg.type ~= "crosshair" then
-            local frameCenterX, frameCenterY = self:GetCenter()
-            if frameCenterX and frameCenterY and UIParent then
-              local screenCenterX, screenCenterY = UIParent:GetCenter()
-              if screenCenterX and screenCenterY then
-                local offsetX = frameCenterX - screenCenterX
-                local offsetY = frameCenterY - screenCenterY
-                self._cfg.point = "CENTER"
-                self._cfg.x = math.floor(offsetX + 0.5)
-                self._cfg.y = math.floor(offsetY + 0.5)
+            local frameLeft = self:GetLeft()
+            local frameTop = self:GetTop()
+            if frameLeft and frameTop and UIParent then
+              local uiParentTop = UIParent:GetTop()
+              if uiParentTop then
+                self._cfg.point = "TOPLEFT"
+                self._cfg.x = math.floor(frameLeft + 0.5)
+                self._cfg.y = math.floor((frameTop - uiParentTop) + 0.5)
               end
             end
           else
@@ -553,7 +671,7 @@ function SkyInfoTiles.Rebuild()
         end
 
         frame:ClearAllPoints()
-        local p = cfg.point or "CENTER"
+        local p = cfg.point or "TOPLEFT"
         local x = cfg.x or 0
         local y = cfg.y or 0
         if cfg.type == "crosshair" or cfg.key == "crosshair" then
@@ -604,7 +722,7 @@ local function ResetToCatalogDefaults()
     table.insert(tiles, {
       key = cat.key, type = cat.type, label = cat.label,
       enabled = (cat.defaultEnabled ~= false),
-      point = "CENTER", x = 0, y = 0, strata = "MEDIUM",
+      point = "TOPLEFT", x = 0, y = 0, strata = "MEDIUM",
     })
   end
   SkyInfoTiles.Rebuild()
@@ -683,7 +801,7 @@ SlashCmdList["SKYINFOTILES"] = function(msg)
     for _, cat in ipairs(CATALOG) do
       local cfg = FindTileByKey(cat.key)
       local on  = cfg and (cfg.enabled ~= false)
-      local pos = cfg and (("%s (%.1f, %.1f)"):format(cfg.point or "CENTER", cfg.x or 0, cfg.y or 0)) or "n/a"
+      local pos = cfg and (("%s (%.1f, %.1f)"):format(cfg.point or "TOPLEFT", cfg.x or 0, cfg.y or 0)) or "n/a"
       Print(string.format("[%s] %s  (%s)  pos=%s", cat.key, cat.label, on and "enabled" or "disabled", pos))
     end
     return
@@ -807,128 +925,65 @@ SlashCmdList["SKYINFOTILES"] = function(msg)
     local sub, args = rest:match("^(%S+)%s*(.*)$")
     sub = (sub or ""):lower()
 
-    local function DeepCopyTiles(src)
-      local out = {}
-      if type(src) ~= "table" then return out end
-      for i, t in ipairs(src) do
-        local nt = {}
-        for k, v in pairs(t) do
-          if type(v) == "table" then
-            local tv = {}
-            for k2, v2 in pairs(v) do tv[k2] = v2 end
-            nt[k] = tv
-          else
-            nt[k] = v
-          end
-        end
-        table.insert(out, nt)
-      end
-      return out
-    end
-
-    local function ListProfiles()
+    local function ListProfilesCmd()
       local active = SkyInfoTiles.GetActiveProfileName()
-      local default = SkyInfoTilesDB.profile or "Default"
+      local charKey = GetCharacterKey()
       Print("Profiles:")
+      Print(string.format("Current character: %s", charKey))
+      Print(string.format("Active profile: %s", active))
+      Print("")
+      Print("Available profiles:")
       for name, prof in pairs(SkyInfoTilesDB.profiles or {}) do
-        local mark = (name == active) and "*" or (name == default) and "-"
-        Print(string.format(" %s %s (tiles=%d)", mark or " ", name, type(prof.tiles)=="table" and #prof.tiles or 0))
+        local mark = (name == active) and "*" or ""
+        local defMark = (name == "Default") and "(Default)" or ""
+        Print(string.format(" %s %s %s (tiles=%d)", mark, name, defMark, type(prof.tiles)=="table" and #prof.tiles or 0))
       end
-      local specMap = SkyInfoTilesDB.specProfiles or {}
-      if type(_G.GetNumSpecializations)=="function" and type(_G.GetSpecializationInfo)=="function" then
-        local n = _G.GetNumSpecializations() or 0
-        for i=1, n do
-          local id, name = _G.GetSpecializationInfo(i)
-          if id then
-            local p = specMap[id]
-            Print(string.format(" Spec %s (%d): %s", tostring(name or "?"), id, p or "(not assigned)"))
-          end
-        end
-      else
-        Print(" Spec mapping unavailable on this client.")
-      end
-    end
-
-    local function ResolveSpecID(token)
-      token = (token or ""):gsub("^%s+",""):gsub("%s+$","")
-      if token == "" then return nil end
-      local num = tonumber(token)
-      if num then return num end
-      if type(_G.GetNumSpecializations)=="function" and type(_G.GetSpecializationInfo)=="function" then
-        local n = _G.GetNumSpecializations() or 0
-        for i=1, n do
-          local id, name = _G.GetSpecializationInfo(i)
-          if id and type(name)=="string" and name:lower() == token:lower() then return id end
-        end
-      end
-      return nil
     end
 
     if sub == "list" or sub == "" then
-      ListProfiles(); return
+      ListProfilesCmd(); return
     elseif sub == "set" then
       local name = args ~= "" and args or "Default"
-      SkyInfoTilesDB.profiles = SkyInfoTilesDB.profiles or {}
-      GetOrCreateProfile(name)
-      SkyInfoTilesDB.profile = name
-      SkyInfoTiles.Rebuild(); SkyInfoTiles.UpdateAll()
-      if SkyInfoTiles._OptionsRefresh then SkyInfoTiles._OptionsRefresh() end
-      Print("Profile set to "..name..".")
+      local success, err = SkyInfoTiles.SetActiveProfile(name)
+      if success then
+        Print("Profile set to "..name..".")
+      else
+        Print("Error: "..tostring(err))
+      end
       return
     elseif sub == "new" then
       local name, copy = args:match("^(%S+)%s*(.*)$")
       if not name or name == "" then Print("Usage: /skytiles profile new <name> [copyFrom]"); return end
-      SkyInfoTilesDB.profiles = SkyInfoTilesDB.profiles or {}
-      local prof = SkyInfoTilesDB.profiles[name]
-      if prof then Print("Profile already exists: "..name); return end
-      local tiles = {}
-      if copy and copy ~= "" and SkyInfoTilesDB.profiles[copy] then
-        tiles = DeepCopyTiles(SkyInfoTilesDB.profiles[copy].tiles)
+      local copyFrom = (copy and copy ~= "") and copy or nil
+      local success, err = SkyInfoTiles.CreateProfile(name, copyFrom)
+      if success then
+        Print("Profile created: "..name)
       else
-        -- copy from current active tiles
-        tiles = DeepCopyTiles(SkyInfoTiles.GetActiveTiles())
+        Print("Error: "..tostring(err))
       end
-      SkyInfoTilesDB.profiles[name] = { tiles = tiles }
-      Print("Profile created: "..name)
+      return
+    elseif sub == "rename" then
+      local oldName, newName = args:match("^(%S+)%s+(%S+)$")
+      if not oldName or not newName then Print("Usage: /skytiles profile rename <oldName> <newName>"); return end
+      local success, err = SkyInfoTiles.RenameProfile(oldName, newName)
+      if success then
+        Print(string.format("Renamed profile '%s' to '%s'.", oldName, newName))
+      else
+        Print("Error: "..tostring(err))
+      end
       return
     elseif sub == "delete" then
       local name = args ~= "" and args or nil
       if not name then Print("Usage: /skytiles profile delete <name>"); return end
-      local active = SkyInfoTiles.GetActiveProfileName()
-      if name == active then Print("Cannot delete the active profile."); return end
-      if name == (SkyInfoTilesDB.profile or "Default") then Print("Cannot delete the default profile."); return end
-      if not (SkyInfoTilesDB.profiles and SkyInfoTilesDB.profiles[name]) then Print("No such profile: "..tostring(name)); return end
-      -- clear spec mappings pointing to it
-      if type(SkyInfoTilesDB.specProfiles)=="table" then
-        for k, v in pairs(SkyInfoTilesDB.specProfiles) do if v == name then SkyInfoTilesDB.specProfiles[k] = nil end end
+      local success, err = SkyInfoTiles.DeleteProfile(name)
+      if success then
+        Print("Deleted profile: "..name)
+      else
+        Print("Error: "..tostring(err))
       end
-      SkyInfoTilesDB.profiles[name] = nil
-      Print("Deleted profile: "..name)
-      return
-    elseif sub == "assign" then
-      local specToken, profName = args:match("^(%S+)%s+(%S+)$")
-      if not specToken or not profName then Print("Usage: /skytiles profile assign <specID|specName> <profile>"); return end
-      local sid = ResolveSpecID(specToken)
-      if not sid then Print("Unknown spec: "..tostring(specToken)); return end
-      if not (SkyInfoTilesDB.profiles and SkyInfoTilesDB.profiles[profName]) then Print("Unknown profile: "..tostring(profName)); return end
-      SkyInfoTilesDB.specProfiles = SkyInfoTilesDB.specProfiles or {}
-      SkyInfoTilesDB.specProfiles[sid] = profName
-      SkyInfoTiles.Rebuild(); SkyInfoTiles.UpdateAll()
-      if SkyInfoTiles._OptionsRefresh then SkyInfoTiles._OptionsRefresh() end
-      Print(string.format("Assigned spec %s (%d) to profile %s.", specToken, sid, profName))
-      return
-    elseif sub == "clear" then
-      local specToken = args ~= "" and args or nil
-      if not specToken then Print("Usage: /skytiles profile clear <specID|specName>"); return end
-      local sid = ResolveSpecID(specToken)
-      if not sid then Print("Unknown spec: "..tostring(specToken)); return end
-      if SkyInfoTilesDB.specProfiles then SkyInfoTilesDB.specProfiles[sid] = nil end
-      SkyInfoTiles.Rebuild(); SkyInfoTiles.UpdateAll()
-      if SkyInfoTiles._OptionsRefresh then SkyInfoTiles._OptionsRefresh() end
-      Print(string.format("Cleared profile assignment for spec %s (%d).", specToken, sid))
       return
     else
-      Print("Usage: /skytiles profile <list|set|new|delete|assign|clear>")
+      Print("Usage: /skytiles profile <list|set|new|rename|delete>")
       return
     end
   end
@@ -947,19 +1002,86 @@ ev:SetScript("OnEvent", function(self, event, ...)
     SkyInfoTilesDB = SkyInfoTilesDB or {}
     applyDefaults(SkyInfoTilesDB, DEFAULTS)
 
-    -- Migrate legacy root tiles into profiles.<default>.tiles if present
-    SkyInfoTilesDB.profiles = SkyInfoTilesDB.profiles or { Default = { tiles = {} } }
-    local defName = SkyInfoTilesDB.profile or "Default"
-    local prof = SkyInfoTilesDB.profiles[defName] or SkyInfoTilesDB.profiles["Default"]
-    if not prof then
-      SkyInfoTilesDB.profiles[defName] = { tiles = {} }
-      prof = SkyInfoTilesDB.profiles[defName]
-    end
-    if type(SkyInfoTilesDB.tiles) == "table" and #SkyInfoTilesDB.tiles > 0 then
-      if type(prof.tiles) ~= "table" or #prof.tiles == 0 then
-        prof.tiles = SkyInfoTilesDB.tiles
+    -- Migration v2: New profile system (per-character profile selection)
+    if not SkyInfoTilesDB._migrated_profiles_v2 then
+
+      -- 1. Migrera gamla root-profil till characterProfiles
+      if SkyInfoTilesDB.profile then
+        local charKey = GetCharacterKey()
+        SkyInfoTilesDB.characterProfiles = SkyInfoTilesDB.characterProfiles or {}
+        -- Sätt nuvarande karaktärs profil-val
+        SkyInfoTilesDB.characterProfiles[charKey] = SkyInfoTilesDB.profile
+        SkyInfoTilesDB.profile = nil  -- Ta bort gamla globala fältet
       end
-      SkyInfoTilesDB.tiles = {} -- clear legacy container
+
+      -- 2. Ta bort spec-profil systemet helt
+      SkyInfoTilesDB.enableSpecProfiles = nil
+      SkyInfoTilesDB.specProfiles = nil
+
+      -- 3. Migrera legacy tiles till Default-profil om de finns
+      if SkyInfoTilesDB.tiles and type(SkyInfoTilesDB.tiles) == "table" and #SkyInfoTilesDB.tiles > 0 then
+        SkyInfoTilesDB.profiles = SkyInfoTilesDB.profiles or {}
+        if not SkyInfoTilesDB.profiles.Default then
+          SkyInfoTilesDB.profiles.Default = { tiles = SkyInfoTilesDB.tiles }
+        elseif type(SkyInfoTilesDB.profiles.Default.tiles) ~= "table" or #SkyInfoTilesDB.profiles.Default.tiles == 0 then
+          SkyInfoTilesDB.profiles.Default.tiles = SkyInfoTilesDB.tiles
+        end
+        SkyInfoTilesDB.tiles = nil
+      end
+
+      -- 4. Säkerställ att Default-profil finns
+      SkyInfoTilesDB.profiles = SkyInfoTilesDB.profiles or {}
+      if not SkyInfoTilesDB.profiles.Default then
+        SkyInfoTilesDB.profiles.Default = { tiles = {} }
+      end
+
+      -- 5. Initiera characterProfiles om den inte finns
+      SkyInfoTilesDB.characterProfiles = SkyInfoTilesDB.characterProfiles or {}
+
+      -- Markera migration som klar
+      SkyInfoTilesDB._migrated_profiles_v2 = true
+    end
+
+    -- Migration v2.4: Convert all tiles from CENTER anchor to TOPLEFT anchor
+    if not SkyInfoTilesDB._migrated_anchor_topleft then
+      if type(SkyInfoTilesDB.profiles) == "table" then
+        for _, prof in pairs(SkyInfoTilesDB.profiles) do
+          if type(prof) == "table" and type(prof.tiles) == "table" then
+            for _, tile in ipairs(prof.tiles) do
+              if tile and tile.point == "CENTER" then
+                -- Skip crosshair - it stays at CENTER
+                if tile.key == "crosshair" or tile.type == "crosshair" then
+                  -- Keep crosshair at CENTER (0, 0)
+                  tile.point = "CENTER"
+                  tile.x = 0
+                  tile.y = 0
+                else
+                  -- Convert CENTER coordinates to TOPLEFT coordinates
+                  -- CENTER (0,0) is screen center, TOPLEFT (0,0) is top-left corner
+                  -- TOPLEFT_x = CENTER_x + screenWidth/2
+                  -- TOPLEFT_y = CENTER_y - screenHeight/2
+                  local screenWidth = math.floor((GetScreenWidth and GetScreenWidth() or 1920) + 0.5)
+                  local screenHeight = math.floor((GetScreenHeight and GetScreenHeight() or 1080) + 0.5)
+
+                  local centerX = tile.x or 0
+                  local centerY = tile.y or 0
+
+                  tile.point = "TOPLEFT"
+                  tile.x = centerX + screenWidth / 2
+                  tile.y = centerY - screenHeight / 2
+                end
+              end
+            end
+          end
+        end
+      end
+      SkyInfoTilesDB._migrated_anchor_topleft = true
+    end
+
+    -- Vid varje login: säkerställ att nuvarande karaktär har en profil vald
+    local charKey = GetCharacterKey()
+    if not SkyInfoTilesDB.characterProfiles[charKey] then
+      SkyInfoTilesDB.characterProfiles[charKey] = "Default"
     end
 
     -- Remove deprecated tiles from all profiles (1.7.1 cleanup)
