@@ -522,7 +522,7 @@ local function CreateOptionsWindow()
   local bgTexture = f:CreateTexture(nil, "BACKGROUND", nil, -8)
   bgTexture:SetTexture("Interface\\AddOns\\SkyInfoTiles\\media\\bg2.png")
   bgTexture:SetAllPoints(f)
-  bgTexture:SetTexCoord(0.05, 0.95, 0.05, 0.92)  -- Crop more from bottom to remove black edge
+  bgTexture:SetTexCoord(0.05, 0.95, 0.08, 0.92)  -- Restore original crop
   bgTexture:SetVertexColor(0.6, 0.85, 1.0)  -- Sky blue tint
   bgTexture:SetAlpha(1.0)
 
@@ -535,7 +535,7 @@ local function CreateOptionsWindow()
   bgGradient:SetBlendMode("ADD")
 
   -- Larger to better fit blue content area
-  f:SetSize(1100, 850)
+  f:SetSize(1100, 850)  -- Restore original height
   f:SetPoint("CENTER")
   f:SetFrameStrata("DIALOG")
 
@@ -596,176 +596,148 @@ local function CreateOptionsWindow()
 
   print("SkyInfoTiles: Background texture loaded on bgFrame (theme with sky blue tint)")
 
-  -- Title bar with gradient background
-  local titleBar = CreateFrame("Frame", nil, f, "BackdropTemplate")
-  titleBar:SetPoint("TOPLEFT", 2, -2)
-  titleBar:SetPoint("TOPRIGHT", -2, -2)
-  titleBar:SetHeight(40)
-  titleBar:SetBackdrop({
-    bgFile = "Interface\\Buttons\\WHITE8X8",
-    edgeFile = nil,
-  })
-  titleBar:SetBackdropColor(0.075, 0.095, 0.115, 0.95)  -- Slightly lighter than main
-  titleBar:EnableMouse(true)
-  titleBar:RegisterForDrag("LeftButton")
-  titleBar:SetScript("OnDragStart", function() f:StartMoving() end)
-  titleBar:SetScript("OnDragStop", function() f:StopMovingOrSizing() end)
-  titleBar:SetFrameLevel(f:GetFrameLevel() + 1)
+  -- Enable dragging directly on main frame
+  f:EnableMouse(true)
+  f:RegisterForDrag("LeftButton")
+  f:SetScript("OnDragStart", function(self) self:StartMoving() end)
+  f:SetScript("OnDragStop", function(self) self:StopMovingOrSizing() end)
 
-  -- Add subtle gradient overlay (sky blue accent)
-  local gradient = titleBar:CreateTexture(nil, "BACKGROUND")
-  gradient:SetAllPoints()
-  gradient:SetGradient("HORIZONTAL",
-    CreateColor(0.4, 0.8, 1.0, 0.08),  -- Sky blue accent
-    CreateColor(0, 0, 0, 0))
+  -- Invisible close button positioned over the X icon in bg2.png (top right)
+  local closeBtn = CreateFrame("Button", nil, f)
+  closeBtn:SetSize(40, 40)
+  closeBtn:SetPoint("TOPRIGHT", f, "TOPRIGHT", -15, -15)
+  closeBtn:SetScript("OnClick", function() f:Hide() end)
+  closeBtn:SetScript("OnEnter", function(self)
+    GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+    GameTooltip:SetText("Close")
+    GameTooltip:Show()
+  end)
+  closeBtn:SetScript("OnLeave", function() GameTooltip:Hide() end)
 
-  -- Title text (pure white, bigger font) - child of titleBar so it's always on top
-  local title = titleBar:CreateFontString(nil, "OVERLAY", "SystemFont_Huge1")
-  title:SetPoint("LEFT", titleBar, "LEFT", 15, 0)
+  -- Title text (no background bar, just text on the frame)
+  local title = f:CreateFontString(nil, "OVERLAY", "SystemFont_Huge1")
+  title:SetPoint("TOP", f, "TOP", 0, -40)  -- Further down from -15
   title:SetText("SkyInfoTiles")
-  title:SetFont(title:GetFont(), 28, "THICKOUTLINE")  -- Bigger from 24
-  title:SetTextColor(1, 1, 1, 1)  -- Pure white instead of yellow
+  title:SetFont(title:GetFont(), 36, "THICKOUTLINE")  -- Larger from 28
+  title:SetTextColor(1, 1, 1, 1)  -- Pure white
   title:SetShadowColor(0, 0, 0, 0.8)
   title:SetShadowOffset(2, -2)
 
-  -- Close button
-  local closeBtn = CreateFrame("Button", nil, f, "UIPanelCloseButton")
-  closeBtn:SetPoint("TOPRIGHT", f, "TOPRIGHT", -3, -3)
-  closeBtn:SetScript("OnClick", function() f:Hide() end)
-
   -- No resize grip (window is fixed size)
 
-  -- Tab buttons
-  local tabs = {}
+  -- Sidebar frame (left navigation)
+  local sidebar = CreateFrame("Frame", nil, f)
+  sidebar:SetPoint("TOPLEFT", f, "TOPLEFT", 0, -50)  -- Below title
+  sidebar:SetPoint("BOTTOMLEFT", f, "BOTTOMLEFT", 0, 0)
+  sidebar:SetWidth(210)
+
+  local sidebarButtons = {}
   local tabContent = {}
+  local SelectSidebarButton  -- Forward declaration
 
-  -- Function to layout tabs dynamically based on window width
-  local function LayoutTabs()
-    if not tabs or #tabs == 0 then return end
+  -- Create sidebar button
+  local function CreateSidebarButton(name, index, yOffset)
+    local btn = CreateFrame("Button", nil, sidebar, "BackdropTemplate")
+    btn:SetSize(200, 40)
+    btn:SetPoint("TOPLEFT", sidebar, "TOPLEFT", 5, yOffset)
+    btn.index = index
 
-    local windowWidth = f:GetWidth()
-    local tabWidth = 110
-    local tabHeight = 32
-    local tabSpacing = 5
-    local startX = 10
-    local startY = -50
-    local maxTabsPerRow = math.floor((windowWidth - startX * 2 + tabSpacing) / (tabWidth + tabSpacing))
-
-    if maxTabsPerRow < 1 then maxTabsPerRow = 1 end
-
-    for i, tab in ipairs(tabs) do
-      local row = math.floor((i - 1) / maxTabsPerRow)
-      local col = (i - 1) % maxTabsPerRow
-      tab:ClearAllPoints()
-      tab:SetPoint("TOPLEFT", f, "TOPLEFT", startX + col * (tabWidth + tabSpacing), startY - row * (tabHeight + tabSpacing))
-    end
-
-    -- Adjust content area based on number of rows
-    local numRows = math.ceil(#tabs / maxTabsPerRow)
-    local contentStartY = startY - numRows * (tabHeight + tabSpacing) - 10
-    if contentArea then
-      contentArea:ClearAllPoints()
-      contentArea:SetPoint("TOPLEFT", 10, contentStartY)
-      contentArea:SetPoint("BOTTOMRIGHT", -10, 10)
-    end
-  end
-
-  f.LayoutTabs = LayoutTabs
-
-  local function CreateTab(name, index)
-    local tab = CreateFrame("Button", nil, f, "BackdropTemplate")
-    tab:SetSize(110, 32)
-    tab:SetPoint("TOPLEFT", 10, -50) -- Initial position, will be repositioned
-
-    -- Modern tab styling
-    tab:SetBackdrop({
+    -- Transparent background
+    btn:SetBackdrop({
       bgFile = "Interface\\Buttons\\WHITE8X8",
-      edgeFile = "Interface\\Buttons\\WHITE8X8",
-      tile = false,
-      edgeSize = 1,
-      insets = { left = 1, right = 1, top = 1, bottom = 1 }
+      edgeFile = nil
     })
-    tab:SetBackdropColor(0.06, 0.08, 0.10, 0.8)  -- Deselected
-    tab:SetBackdropBorderColor(1, 1, 1, 0.05)
+    btn:SetBackdropColor(0, 0, 0, 0)
 
-    -- Text
-    local text = tab:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
-    text:SetPoint("CENTER")
+    -- Left indicator line (sky blue, hidden by default)
+    local indicator = btn:CreateTexture(nil, "ARTWORK")
+    indicator:SetColorTexture(0.4, 0.8, 1.0, 0.9)
+    indicator:SetSize(3, 40)
+    indicator:SetPoint("LEFT", btn, "LEFT", 0, 0)
+    indicator:Hide()
+    btn.indicator = indicator
+
+    -- Text label (left-aligned)
+    local text = btn:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
+    text:SetPoint("LEFT", btn, "LEFT", 10, 0)
     text:SetText(name)
     text:SetTextColor(0.7, 0.7, 0.7, 1)
-    tab.text = text
+    btn.text = text
 
-    -- Add accent underline (created but hidden initially)
-    local underline = tab:CreateTexture(nil, "OVERLAY")
-    underline:SetColorTexture(0.4, 0.8, 1.0, 0.9)  -- Sky blue
-    underline:SetHeight(2)
-    underline:SetPoint("BOTTOMLEFT", tab, "BOTTOMLEFT", 4, 0)
-    underline:SetPoint("BOTTOMRIGHT", tab, "BOTTOMRIGHT", -4, 0)
-    underline:Hide()
-    tab.underline = underline
+    -- Hover glow
+    local hoverGlow = btn:CreateTexture(nil, "BACKGROUND")
+    hoverGlow:SetColorTexture(0.1, 0.1, 0.15, 0.3)
+    hoverGlow:SetAllPoints(btn)
+    hoverGlow:Hide()
+    btn.hoverGlow = hoverGlow
 
-    -- Hover effect
-    tab:SetScript("OnEnter", function(self)
+    -- Hover handlers
+    btn:SetScript("OnEnter", function(self)
       if not self.selected then
-        self:SetBackdropColor(0.08, 0.10, 0.12, 0.9)
-        self:SetBackdropBorderColor(1, 1, 1, 0.12)
+        self.hoverGlow:Show()
         self.text:SetTextColor(1, 1, 1, 0.85)
       end
     end)
 
-    -- Unhover
-    tab:SetScript("OnLeave", function(self)
+    btn:SetScript("OnLeave", function(self)
       if not self.selected then
-        self:SetBackdropColor(0.06, 0.08, 0.10, 0.8)
-        self:SetBackdropBorderColor(1, 1, 1, 0.05)
+        self.hoverGlow:Hide()
         self.text:SetTextColor(0.7, 0.7, 0.7, 1)
       end
     end)
 
-    -- Click handler (update to show/hide underline)
-    tab:SetScript("OnClick", function(self)
-      -- Deselect all tabs
-      for _, t in ipairs(tabs) do
-        t.selected = false
-        t:SetBackdropColor(0.06, 0.08, 0.10, 0.8)
-        t:SetBackdropBorderColor(1, 1, 1, 0.05)
-        t.text:SetTextColor(0.7, 0.7, 0.7, 1)
-        if t.underline then t.underline:Hide() end
-      end
+    return btn
+  end
 
-      -- Select this tab
-      self.selected = true
-      self:SetBackdropColor(0.02, 0.03, 0.04, 1.0)  -- Darkest
-      self:SetBackdropBorderColor(0.4, 0.8, 1.0, 0.6)  -- Sky blue border
-      self.text:SetTextColor(1, 1, 1, 1)  -- Bright white
-      if self.underline then self.underline:Show() end
+  -- Selection logic
+  SelectSidebarButton = function(index)
+    -- Deselect all
+    for i, btn in ipairs(sidebarButtons) do
+      btn.selected = false
+      btn.indicator:Hide()
+      btn.text:SetTextColor(0.7, 0.7, 0.7, 1)
+    end
+
+    -- Select clicked button
+    local btn = sidebarButtons[index]
+    if btn then
+      btn.selected = true
+      btn.indicator:Show()
+      btn.text:SetTextColor(1, 1, 1, 1)
 
       -- Show corresponding content
       for i, content in ipairs(tabContent) do
-        content:SetShown(i == index)
+        content:Hide()
       end
-    end)
-
-    tabs[index] = tab
-    return tab
+      if tabContent[index] then
+        tabContent[index]:Show()
+      end
+    end
   end
 
-  -- Create tabs (2 rows to fit all tiles)
-  CreateTab("General", 1)
-  CreateTab("Currencies", 2)
-  CreateTab("Keystone", 3)
-  CreateTab("Char Stats", 4)
-  CreateTab("Crosshair", 5)
-  CreateTab("Clock", 6)
-  CreateTab("Portals", 7)
-  CreateTab("BuffTracker", 8)
-  CreateTab("InfoBar", 9)
-  CreateTab("Profiles", 10)
+  -- Create all sidebar buttons
+  local tabNames = {"General", "Currencies", "Keystone", "Char Stats", "Crosshair", "Clock", "Portals", "BuffTracker", "InfoBar", "Profiles"}
+  local yOffset = -120  -- Further down below horizontal line
+  for i, name in ipairs(tabNames) do
+    local btn = CreateSidebarButton(name, i, yOffset)
+    btn:SetScript("OnClick", function(self)
+      SelectSidebarButton(self.index)
+    end)
+    table.insert(sidebarButtons, btn)
+    yOffset = yOffset - 45
+  end
+
+  -- Mark first button (General) as selected by default
+  if sidebarButtons[1] then
+    sidebarButtons[1].selected = true
+    sidebarButtons[1].indicator:Show()
+    sidebarButtons[1].text:SetTextColor(1, 1, 1, 1)
+  end
 
   -- Content area (no backdrop template - fully transparent)
   local contentArea = CreateFrame("Frame", nil, f)
-  contentArea:SetPoint("TOPLEFT", 10, -130)
-  contentArea:SetPoint("BOTTOMRIGHT", -10, 10)
+  contentArea:SetPoint("TOPLEFT", sidebar, "TOPRIGHT", 50, -120)  -- More right, further down
+  contentArea:SetPoint("BOTTOMRIGHT", f, "BOTTOMRIGHT", -10, 80)  -- End higher up (80 instead of 10)
 
   -- === TAB 1: GENERAL ===
   local generalTab = CreateFrame("Frame", nil, contentArea)
@@ -3363,12 +3335,23 @@ CreateOptionsWindow_Part2 = function(contentArea, tabContent, f, tabs)
   profilesTab.deleteBtn = deleteBtn
 
   -- Show first tab by default and layout tabs
-  tabs[1]:Click()
-  if f.LayoutTabs then f.LayoutTabs() end
+  -- Select first button (General) by default
+  if SelectSidebarButton then
+    SelectSidebarButton(1)
+  else
+    print("ERROR: SelectSidebarButton is nil!")
+    -- Fallback: show first tab content manually
+    if tabContent[1] then
+      for i, content in ipairs(tabContent) do
+        content:Hide()
+      end
+      tabContent[1]:Show()
+    end
+  end
 
   -- Save frame
   optionsFrame = f
-  f.tabs = tabs
+  f.sidebarButtons = sidebarButtons
   f.tabContent = tabContent
 end
 
