@@ -204,9 +204,8 @@ local function CreateInfoBarTab(contentArea, tabContent)
   }
   local strataOrder = { "BACKGROUND", "LOW", "MEDIUM", "HIGH", "DIALOG", "FULLSCREEN", "FULLSCREEN_DIALOG", "TOOLTIP" }
 
-  local strataRow, strataH, strataDropdown = W:CreateDropdown(scrollChild, yOffset, "Frame Strata",
-    strataValues,
-    strataOrder,
+  local strataRow, strataHeight, strataDropdown = W:CreateDropdown(scrollChild, yOffset, "Frame Strata (Layer)",
+    strataValues, strataOrder,
     function()
       if SkyInfoTiles.GetActiveTiles then
         local tiles = SkyInfoTiles.GetActiveTiles()
@@ -233,10 +232,10 @@ local function CreateInfoBarTab(contentArea, tabContent)
         end
       end
     end,
-    "Set the UI layer (strata) for the Info Bar"
+    "Set the frame strata (layer) for the info bar"
   )
   infobarTab.strataDropdown = strataDropdown
-  yOffset = yOffset - strataH
+  yOffset = yOffset - strataHeight - 10
 
   -- Section header: Display Options
   local _, headerHeight = W:CreateSectionHeader(scrollChild, yOffset, "Display Options")
@@ -322,7 +321,78 @@ local function CreateInfoBarTab(contentArea, tabContent)
   separator1:SetPoint("TOPLEFT", 10, yOffset - 5)
   yOffset = yOffset - 20
 
-  -- Tooltip section continues...
+  -- Section header: Notification Settings
+  local _, notifHeaderHeight = W:CreateSectionHeader(scrollChild, yOffset, "Friend/Guild Online Notification")
+  yOffset = yOffset - notifHeaderHeight - 10
+
+  -- Sound selection dropdown
+  local soundValues = {
+    FRIENDS_ONLINE = "Friend Online (Recommended)",
+    WOW_LOGIN = "WoW Login Sound",
+    LEVEL_UP = "Level Up",
+    READY_CHECK = "Ready Check",
+    RAID_WARNING = "Raid Warning",
+    PVP_ENTER_QUEUE = "PvP Queue Pop (Loud)",
+    TELL_MESSAGE = "Whisper",
+    AUCTION_WINDOW_OPEN = "Pleasant Pling",
+    LOOT_WINDOW_COIN_SOUND = "Coin Drop",
+    QUEST_COMPLETE = "Quest Complete",
+    ACHIEVEMENT_MENU_OPEN = "Achievement",
+    UI_LEGENDARY_FORGE = "Legendary Item",
+    UI_PROFESSION_DING = "Profession Ding",
+    ALARM_CLOCK_WARNING_1 = "Alarm Bell 1 (Loud)",
+    ALARM_CLOCK_WARNING_2 = "Alarm Bell 2 (Loud)",
+    ALARM_CLOCK_WARNING_3 = "Alarm Bell 3 (Loud)",
+    CUSTOM = "Custom Sound File",
+    NONE = "No Sound"
+  }
+  local soundOrder = {
+    "FRIENDS_ONLINE", "WOW_LOGIN", "LEVEL_UP", "READY_CHECK", "RAID_WARNING",
+    "PVP_ENTER_QUEUE", "TELL_MESSAGE", "AUCTION_WINDOW_OPEN", "LOOT_WINDOW_COIN_SOUND",
+    "QUEST_COMPLETE", "ACHIEVEMENT_MENU_OPEN", "UI_LEGENDARY_FORGE", "UI_PROFESSION_DING",
+    "ALARM_CLOCK_WARNING_1", "ALARM_CLOCK_WARNING_2", "ALARM_CLOCK_WARNING_3",
+    "CUSTOM", "NONE"
+  }
+
+  local soundRow, soundHeight, soundDropdown = W:CreateDropdown(scrollChild, yOffset, "Notification Sound",
+    soundValues, soundOrder,
+    function()
+      return GetTileConfig("onlineSound") or "AUCTION_WINDOW_OPEN"
+    end,
+    function(value)
+      SetTileConfig("onlineSound", value)
+    end,
+    "Choose which sound plays when friends/guildmates come online"
+  )
+  infobarTab.soundDropdown = soundDropdown
+  yOffset = yOffset - soundHeight - 10
+
+  -- Sound channel dropdown
+  local channelValues = {
+    Master = "Master",
+    SFX = "Sound Effects",
+    Music = "Music",
+    Ambience = "Ambience",
+    Dialog = "Dialog"
+  }
+  local channelOrder = { "Master", "SFX", "Music", "Ambience", "Dialog" }
+
+  local channelRow, channelHeight, channelDropdown = W:CreateDropdown(scrollChild, yOffset, "Sound Channel",
+    channelValues, channelOrder,
+    function()
+      return GetTileConfig("onlineSoundChannel") or "Master"
+    end,
+    function(value)
+      SetTileConfig("onlineSoundChannel", value)
+    end,
+    "Choose which audio channel to play the notification sound on"
+  )
+  infobarTab.channelDropdown = channelDropdown
+  yOffset = yOffset - channelHeight - 10
+
+  -- Adjust scrollChild height to fit all content
+  scrollChild:SetHeight(math.abs(yOffset) + 50)
+
   return infobarTab
 end
 
@@ -814,9 +884,8 @@ local function CreateOptionsWindow()
   }
   local strataOrder = { "BACKGROUND", "LOW", "MEDIUM", "HIGH", "DIALOG", "FULLSCREEN", "FULLSCREEN_DIALOG", "TOOLTIP" }
 
-  local strataRow, strataH, strataDropdown = W:CreateDropdown(scrollChild, yOffsetCurr, "Frame Strata",
-    strataValues,
-    strataOrder,
+  local strataRow, strataHeight, strataDropdown = W:CreateDropdown(scrollChild, yOffsetCurr, "Frame Strata (Layer)",
+    strataValues, strataOrder,
     function()
       if SkyInfoTiles.GetActiveTiles then
         local tiles = SkyInfoTiles.GetActiveTiles()
@@ -843,10 +912,10 @@ local function CreateOptionsWindow()
         end
       end
     end,
-    "Set the UI layer (strata) for the Currency tile"
+    "Set the frame strata (layer) for currencies"
   )
   currencyTab.strataDropdown = strataDropdown
-  yOffsetCurr = yOffsetCurr - strataH
+  yOffsetCurr = yOffsetCurr - strataHeight - 10
   currencyTab._currencyListStartY = yOffsetCurr  -- Save for PopulateCurrencies
 
   -- Function to populate currency checkboxes
@@ -1137,39 +1206,36 @@ local function CreateOptionsWindow()
   }
   local strataOrder = { "BACKGROUND", "LOW", "MEDIUM", "HIGH", "DIALOG", "FULLSCREEN", "FULLSCREEN_DIALOG", "TOOLTIP" }
 
-  local strataRow, strataH, strataDropdown = W:CreateDropdown(scrollChild, yOffset, "Frame Strata",
-    strataValues,
-    strataOrder,
+  local strataRow, strataHeight, strataDropdown = W:CreateDropdown(scrollChild, yOffset, "Frame Strata",
+    strataValues, strataOrder,
     function()
-      if SkyInfoTiles.GetActiveTiles then
-        local tiles = SkyInfoTiles.GetActiveTiles()
-        for _, tile in ipairs(tiles) do
-          if tile.key == "keystone" or tile.type == "keystone" then
-            return tile.strata or "MEDIUM"
-          end
+      local tiles = SkyInfoTiles.GetActiveTiles()
+      for _, tile in ipairs(tiles) do
+        if tile.key == "keystone" or tile.type == "keystone" then
+          return tile.strata or "MEDIUM"
         end
       end
       return "MEDIUM"
     end,
     function(value)
-      if SkyInfoTiles.GetActiveTiles then
-        local tiles = SkyInfoTiles.GetActiveTiles()
-        for _, tile in ipairs(tiles) do
-          if tile.key == "keystone" or tile.type == "keystone" then
-            tile.strata = value
-            if SkyInfoTiles.Rebuild and SkyInfoTiles.UpdateAll then
-              SkyInfoTiles.Rebuild()
-              SkyInfoTiles.UpdateAll()
-            end
-            break
+      local tiles = SkyInfoTiles.GetActiveTiles()
+      for _, tile in ipairs(tiles) do
+        if tile.key == "keystone" or tile.type == "keystone" then
+          tile.strata = value
+          if SkyInfoTiles.Rebuild then
+            SkyInfoTiles.Rebuild()
           end
+          if SkyInfoTiles.UpdateAll then
+            SkyInfoTiles.UpdateAll()
+          end
+          break
         end
       end
     end,
-    "Set the UI layer (strata) for the Keystone tile"
+    "Set the frame strata (layer) for the keystone tile"
   )
   keystoneTab.strataDropdown = strataDropdown
-  yOffset = yOffset - strataH
+  yOffset = yOffset - strataHeight - 10
 
   -- ========== BACKGROUND ==========
   local _, bgHeaderH = W:CreateSectionHeader(scrollChild, yOffset, "Background")
@@ -1598,39 +1664,36 @@ local function CreateOptionsWindow()
   }
   local strataOrder = { "BACKGROUND", "LOW", "MEDIUM", "HIGH", "DIALOG", "FULLSCREEN", "FULLSCREEN_DIALOG", "TOOLTIP" }
 
-  local strataRow, strataH, strataDropdown = W:CreateDropdown(scrollChild, yOffsetChar, "Frame Strata",
-    strataValues,
-    strataOrder,
+  local strataRow, strataHeight, strataDropdown = W:CreateDropdown(scrollChild, yOffsetChar, "Frame Strata",
+    strataValues, strataOrder,
     function()
-      if SkyInfoTiles.GetActiveTiles then
-        local tiles = SkyInfoTiles.GetActiveTiles()
-        for _, tile in ipairs(tiles) do
-          if tile.key == "charstats" or tile.type == "charstats" then
-            return tile.strata or "MEDIUM"
-          end
+      local tiles = SkyInfoTiles.GetActiveTiles()
+      for _, tile in ipairs(tiles) do
+        if tile.key == "charstats" or tile.type == "charstats" then
+          return tile.strata or "MEDIUM"
         end
       end
       return "MEDIUM"
     end,
     function(value)
-      if SkyInfoTiles.GetActiveTiles then
-        local tiles = SkyInfoTiles.GetActiveTiles()
-        for _, tile in ipairs(tiles) do
-          if tile.key == "charstats" or tile.type == "charstats" then
-            tile.strata = value
-            if SkyInfoTiles.Rebuild and SkyInfoTiles.UpdateAll then
-              SkyInfoTiles.Rebuild()
-              SkyInfoTiles.UpdateAll()
-            end
-            break
+      local tiles = SkyInfoTiles.GetActiveTiles()
+      for _, tile in ipairs(tiles) do
+        if tile.key == "charstats" or tile.type == "charstats" then
+          tile.strata = value
+          if SkyInfoTiles.Rebuild then
+            SkyInfoTiles.Rebuild()
           end
+          if SkyInfoTiles.UpdateAll then
+            SkyInfoTiles.UpdateAll()
+          end
+          break
         end
       end
     end,
-    "Set the UI layer (strata) for the CharStats tile"
+    "Set the frame strata (layer) for character stats"
   )
   charStatsTab.strataDropdown = strataDropdown
-  yOffsetChar = yOffsetChar - strataH
+  yOffsetChar = yOffsetChar - strataHeight - 10
 
   -- Description
   local desc = scrollChild:CreateFontString(nil, "OVERLAY", "GameFontNormal")
@@ -2268,9 +2331,9 @@ local function CreateOptionsWindow()
     end
   end)
 
-  -- ========== STRATA ==========
-  yOffset = yOffset - 80
+  yOffset = yOffset - 120  -- Account for outline color label + button + spacing
 
+  -- ========== STRATA ==========
   local strataValues = {
     BACKGROUND = "BACKGROUND",
     LOW = "LOW",
@@ -2283,48 +2346,55 @@ local function CreateOptionsWindow()
   }
   local strataOrder = { "BACKGROUND", "LOW", "MEDIUM", "HIGH", "DIALOG", "FULLSCREEN", "FULLSCREEN_DIALOG", "TOOLTIP" }
 
-  local strataRow, strataH, strataDropdown = W:CreateDropdown(scrollChild, yOffset, "Frame Strata",
-    strataValues,
-    strataOrder,
+  local strataRow, strataHeight, strataDropdown = W:CreateDropdown(scrollChild, yOffset, "Frame Strata",
+    strataValues, strataOrder,
     function()
-      if SkyInfoTiles.GetActiveTiles then
-        local tiles = SkyInfoTiles.GetActiveTiles()
-        for _, tile in ipairs(tiles) do
-          if tile.key == "crosshair" or tile.type == "crosshair" then
-            return tile.strata or "MEDIUM"
-          end
+      local tiles = SkyInfoTiles.GetActiveTiles()
+      for _, tile in ipairs(tiles) do
+        if tile.key == "crosshair" or tile.type == "crosshair" then
+          return tile.strata or "MEDIUM"
         end
       end
       return "MEDIUM"
     end,
     function(value)
-      if SkyInfoTiles.GetActiveTiles then
-        local tiles = SkyInfoTiles.GetActiveTiles()
-        for _, tile in ipairs(tiles) do
-          if tile.key == "crosshair" or tile.type == "crosshair" then
-            tile.strata = value
-            if SkyInfoTiles.Rebuild and SkyInfoTiles.UpdateAll then
-              SkyInfoTiles.Rebuild()
-              SkyInfoTiles.UpdateAll()
-            end
-            break
+      local tiles = SkyInfoTiles.GetActiveTiles()
+      for _, tile in ipairs(tiles) do
+        if tile.key == "crosshair" or tile.type == "crosshair" then
+          tile.strata = value
+          if SkyInfoTiles.Rebuild then
+            SkyInfoTiles.Rebuild()
           end
+          if SkyInfoTiles.UpdateAll then
+            SkyInfoTiles.UpdateAll()
+          end
+          break
         end
       end
     end,
-    "Set the UI layer (strata) for the Crosshair tile"
+    "Set the frame strata (layer) for the crosshair"
   )
   crosshairTab.strataDropdown = strataDropdown
-  yOffset = yOffset - strataH
+  yOffset = yOffset - strataHeight - 10
 
   -- === TAB 6: CLOCK (with font and size options) ===
-  local clockTab = CreateFrame("Frame", nil, contentArea)
-  clockTab:SetAllPoints()
-  clockTab = CreateStandardTab(contentArea, tabContent, 6, "clock", "24h Clock", "Display a 24-hour clock")
+  local clockTab, clockYOffset = CreateStandardTab(contentArea, tabContent, 6, "clock", "24h Clock", "Display a 24-hour clock")
+
+  -- Scroll frame for settings
+  local scrollFrame = CreateFrame("ScrollFrame", nil, clockTab, "UIPanelScrollFrameTemplate")
+  scrollFrame:SetPoint("TOPLEFT", 5, clockYOffset)
+  scrollFrame:SetPoint("BOTTOMRIGHT", -25, 10)
+
+  local scrollChild = CreateFrame("Frame", nil, scrollFrame)
+  scrollChild:SetSize(580, 800)
+  scrollFrame:SetScrollChild(scrollChild)
+
+  clockTab.scrollFrame = scrollFrame
+  clockTab.scrollChild = scrollChild
 
   -- Position sliders (X and Y)
-  local yOffsetClock = -50
-  local clockPosSliders = CreatePositionSliders(clockTab, "clock", "clock", yOffsetClock)
+  local yOffsetClock = -10
+  local clockPosSliders = CreatePositionSliders(scrollChild, "clock", "clock", yOffsetClock)
   clockTab.xPosSlider = clockPosSliders.xPosSlider
   clockTab.xPosEditBox = clockPosSliders.xPosEditBox
   clockTab.yPosSlider = clockPosSliders.yPosSlider
@@ -2344,39 +2414,36 @@ local function CreateOptionsWindow()
   }
   local strataOrder = { "BACKGROUND", "LOW", "MEDIUM", "HIGH", "DIALOG", "FULLSCREEN", "FULLSCREEN_DIALOG", "TOOLTIP" }
 
-  local strataRow, strataH, strataDropdown = W:CreateDropdown(clockTab, yOffsetClock, "Frame Strata",
-    strataValues,
-    strataOrder,
+  local strataRow, strataHeight, strataDropdown = W:CreateDropdown(scrollChild, yOffsetClock, "Frame Strata",
+    strataValues, strataOrder,
     function()
-      if SkyInfoTiles.GetActiveTiles then
-        local tiles = SkyInfoTiles.GetActiveTiles()
-        for _, tile in ipairs(tiles) do
-          if tile.key == "clock" or tile.type == "clock" then
-            return tile.strata or "MEDIUM"
-          end
+      local tiles = SkyInfoTiles.GetActiveTiles()
+      for _, tile in ipairs(tiles) do
+        if tile.key == "clock" or tile.type == "clock" then
+          return tile.strata or "MEDIUM"
         end
       end
       return "MEDIUM"
     end,
     function(value)
-      if SkyInfoTiles.GetActiveTiles then
-        local tiles = SkyInfoTiles.GetActiveTiles()
-        for _, tile in ipairs(tiles) do
-          if tile.key == "clock" or tile.type == "clock" then
-            tile.strata = value
-            if SkyInfoTiles.Rebuild and SkyInfoTiles.UpdateAll then
-              SkyInfoTiles.Rebuild()
-              SkyInfoTiles.UpdateAll()
-            end
-            break
+      local tiles = SkyInfoTiles.GetActiveTiles()
+      for _, tile in ipairs(tiles) do
+        if tile.key == "clock" or tile.type == "clock" then
+          tile.strata = value
+          if SkyInfoTiles.Rebuild then
+            SkyInfoTiles.Rebuild()
           end
+          if SkyInfoTiles.UpdateAll then
+            SkyInfoTiles.UpdateAll()
+          end
+          break
         end
       end
     end,
-    "Set the UI layer (strata) for the Clock tile"
+    "Set the frame strata (layer) for the clock"
   )
   clockTab.strataDropdown = strataDropdown
-  yOffsetClock = yOffsetClock - strataH
+  yOffsetClock = yOffsetClock - strataHeight - 10
 
   -- Font dropdown
   -- Use global font discovery
@@ -2397,21 +2464,18 @@ local function CreateOptionsWindow()
   local fonts = DiscoverFonts()
   local fontValues = {}
   local fontOrder = {}
-  for _, font in ipairs(fonts) do
-    fontValues[font.path] = font.name
-    table.insert(fontOrder, font.path)
+  for _, fontInfo in ipairs(fonts) do
+    fontValues[fontInfo.path] = fontInfo.name
+    table.insert(fontOrder, fontInfo.path)
   end
 
-  local fontRow, fontH, fontDropdown = W:CreateDropdown(clockTab, yOffsetClock, "Font",
-    fontValues,
-    fontOrder,
+  local fontRow, fontHeight, fontDropdown = W:CreateDropdown(scrollChild, yOffsetClock, "Font",
+    fontValues, fontOrder,
     function()
-      if SkyInfoTiles.GetActiveTiles then
-        local tiles = SkyInfoTiles.GetActiveTiles()
-        for _, tile in ipairs(tiles) do
-          if tile.key == "clock" or tile.type == "clock" then
-            return tile.font or "Fonts\\FRIZQT__.ttf"
-          end
+      local tiles = SkyInfoTiles.GetActiveTiles()
+      for _, tile in ipairs(tiles) do
+        if tile.key == "clock" or tile.type == "clock" then
+          return tile.font or "Fonts\\FRIZQT__.ttf"
         end
       end
       return "Fonts\\FRIZQT__.ttf"
@@ -2431,21 +2495,13 @@ local function CreateOptionsWindow()
         end
       end
     end,
-    "Choose the font for the clock"
+    "Choose the font for the clock display"
   )
   clockTab.fontDropdown = fontDropdown
   clockTab.GetFontOptions = DiscoverFonts -- Store reference for refresh
-  yOffsetClock = yOffsetClock - fontH
+  yOffsetClock = yOffsetClock - fontHeight - 10
 
-  -- Tip text (moved below dropdown)
-  local tipText = clockTab:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-  tipText:SetPoint("TOPLEFT", 10, yOffsetClock - 5)
-  tipText:SetTextColor(0.7, 0.7, 0.7, 1)
-  tipText:SetText("Tip: Set outline to 'None' to see font differences clearly!")
-
-  yOffsetClock = yOffsetClock - 80
-
-  local sliderRow, heightUsed, sliderRef = W:CreateSlider(clockTab, yOffsetClock, "Font Size", 8, 48, 1,
+  local sliderRow, heightUsed, sliderRef = W:CreateSlider(scrollChild, yOffsetClock, "Font Size", 8, 48, 1,
     function() -- getValue
       if SkyInfoTiles.GetActiveTiles then
         local tiles = SkyInfoTiles.GetActiveTiles()
@@ -2478,11 +2534,23 @@ local function CreateOptionsWindow()
   clockTab.sizeSlider = sliderRef
 
   -- === TAB 7: DUNGEON PORTS (with orientation option) ===
-  local dungeonTab = CreateStandardTab(contentArea, tabContent, 7, "dungeonports", "Dungeon Teleports", "Quick access to dungeon teleports")
+  local dungeonTab, dungeonYOffset = CreateStandardTab(contentArea, tabContent, 7, "dungeonports", "Dungeon Teleports", "Quick access to dungeon teleports")
+
+  -- Scroll frame for settings
+  local scrollFrame = CreateFrame("ScrollFrame", nil, dungeonTab, "UIPanelScrollFrameTemplate")
+  scrollFrame:SetPoint("TOPLEFT", 5, dungeonYOffset)
+  scrollFrame:SetPoint("BOTTOMRIGHT", -25, 10)
+
+  local scrollChild = CreateFrame("Frame", nil, scrollFrame)
+  scrollChild:SetSize(580, 800)
+  scrollFrame:SetScrollChild(scrollChild)
+
+  dungeonTab.scrollFrame = scrollFrame
+  dungeonTab.scrollChild = scrollChild
 
   -- Position sliders (X and Y)
-  local yOffsetDungeon = -50
-  local dungeonPosSliders = CreatePositionSliders(dungeonTab, "dungeonports", "dungeonports", yOffsetDungeon)
+  local yOffsetDungeon = -10
+  local dungeonPosSliders = CreatePositionSliders(scrollChild, "dungeonports", "dungeonports", yOffsetDungeon)
   dungeonTab.xPosSlider = dungeonPosSliders.xPosSlider
   dungeonTab.xPosEditBox = dungeonPosSliders.xPosEditBox
   dungeonTab.yPosSlider = dungeonPosSliders.yPosSlider
@@ -2490,15 +2558,14 @@ local function CreateOptionsWindow()
   yOffsetDungeon = dungeonPosSliders.newYOffset
 
   -- Orientation dropdown (horizontal/vertical)
-  local orientValues = {
+  local orientationValues = {
     horizontal = "Horizontal",
     vertical = "Vertical"
   }
-  local orientOrder = { "horizontal", "vertical" }
+  local orientationOrder = { "horizontal", "vertical" }
 
-  local orientRow, orientH, orientDropdown = W:CreateDropdown(dungeonTab, yOffsetDungeon, "Layout Orientation",
-    orientValues,
-    orientOrder,
+  local orientRow, orientHeight, orientDropdown = W:CreateDropdown(scrollChild, yOffsetDungeon, "Layout Orientation",
+    orientationValues, orientationOrder,
     function()
       if SkyInfoTiles.GetActiveTiles then
         local tiles = SkyInfoTiles.GetActiveTiles()
@@ -2525,52 +2592,54 @@ local function CreateOptionsWindow()
         end
       end
     end,
-    "Choose whether to display dungeon ports horizontally or vertically"
+    "Choose horizontal or vertical layout for dungeon teleports"
   )
   dungeonTab.orientDropdown = orientDropdown
-  yOffsetDungeon = yOffsetDungeon - orientH
-  yOffsetDungeon = yOffsetDungeon - 70
+  yOffsetDungeon = yOffsetDungeon - orientHeight - 10
 
   -- ========== STRATA ==========
-  local strataLabel = dungeonTab:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-  strataLabel:SetPoint("TOPLEFT", 10, yOffsetDungeon)
-  strataLabel:SetText("Frame Strata:")
-  strataLabel:SetTextColor(1, 0.82, 0, 1)
+  local strataValues = {
+    BACKGROUND = "BACKGROUND",
+    LOW = "LOW",
+    MEDIUM = "MEDIUM",
+    HIGH = "HIGH",
+    DIALOG = "DIALOG",
+    FULLSCREEN = "FULLSCREEN",
+    FULLSCREEN_DIALOG = "FULLSCREEN_DIALOG",
+    TOOLTIP = "TOOLTIP"
+  }
+  local strataOrder = { "BACKGROUND", "LOW", "MEDIUM", "HIGH", "DIALOG", "FULLSCREEN", "FULLSCREEN_DIALOG", "TOOLTIP" }
 
-  local strataDropdown = CreateFrame("Frame", "SkyInfoTilesDungeonPortsStrataDropdown", dungeonTab, "UIDropDownMenuTemplate")
-  strataDropdown:SetPoint("TOPLEFT", strataLabel, "BOTTOMLEFT", -15, -5)
-  UIDropDownMenu_SetWidth(strataDropdown, 150)
-
-  local function OnStrataSelect(self)
-    local tiles = SkyInfoTiles.GetActiveTiles()
-    for _, tile in ipairs(tiles) do
-      if tile.key == "dungeonports" or tile.type == "dungeonports" then
-        tile.strata = self.value
-        if SkyInfoTiles.Rebuild then
-          SkyInfoTiles.Rebuild()
+  local strataRow, strataHeight, strataDropdown = W:CreateDropdown(scrollChild, yOffsetDungeon, "Frame Strata",
+    strataValues, strataOrder,
+    function()
+      local tiles = SkyInfoTiles.GetActiveTiles()
+      for _, tile in ipairs(tiles) do
+        if tile.key == "dungeonports" or tile.type == "dungeonports" then
+          return tile.strata or "MEDIUM"
         end
-        if SkyInfoTiles.UpdateAll then
-          SkyInfoTiles.UpdateAll()
-        end
-        break
       end
-    end
-    UIDropDownMenu_SetText(strataDropdown, self.value)
-  end
-
-  UIDropDownMenu_Initialize(strataDropdown, function(self, level)
-    local info = UIDropDownMenu_CreateInfo()
-    local strataOptions = {"BACKGROUND", "LOW", "MEDIUM", "HIGH", "DIALOG", "FULLSCREEN", "FULLSCREEN_DIALOG", "TOOLTIP"}
-    for _, strata in ipairs(strataOptions) do
-      info.text = strata
-      info.value = strata
-      info.func = OnStrataSelect
-      UIDropDownMenu_AddButton(info)
-    end
-  end)
-
-  UIDropDownMenu_SetText(strataDropdown, "MEDIUM")
+      return "MEDIUM"
+    end,
+    function(value)
+      local tiles = SkyInfoTiles.GetActiveTiles()
+      for _, tile in ipairs(tiles) do
+        if tile.key == "dungeonports" or tile.type == "dungeonports" then
+          tile.strata = value
+          if SkyInfoTiles.Rebuild then
+            SkyInfoTiles.Rebuild()
+          end
+          if SkyInfoTiles.UpdateAll then
+            SkyInfoTiles.UpdateAll()
+          end
+          break
+        end
+      end
+    end,
+    "Set the frame strata (layer) for dungeon teleports"
+  )
   dungeonTab.strataDropdown = strataDropdown
+  yOffsetDungeon = yOffsetDungeon - strataHeight - 10
 
   -- Call continuation function to avoid 200 local variable limit
   CreateOptionsWindow_Part2(contentArea, tabContent, f, tabs)
@@ -2608,49 +2677,50 @@ CreateOptionsWindow_Part2 = function(contentArea, tabContent, f, tabs)
   yOffsetBuff = yOffsetBuff - 20
 
   -- Strata dropdown
-  local strataLabel = scrollChild:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-  strataLabel:SetPoint("TOPLEFT", 10, yOffsetBuff)
-  strataLabel:SetText("Frame Strata (Layer):")
-  strataLabel:SetTextColor(1, 0.82, 0, 1)
+  local strataValues = {
+    BACKGROUND = "BACKGROUND",
+    LOW = "LOW",
+    MEDIUM = "MEDIUM",
+    HIGH = "HIGH",
+    DIALOG = "DIALOG",
+    FULLSCREEN = "FULLSCREEN",
+    FULLSCREEN_DIALOG = "FULLSCREEN_DIALOG",
+    TOOLTIP = "TOOLTIP"
+  }
+  local strataOrder = { "BACKGROUND", "LOW", "MEDIUM", "HIGH", "DIALOG", "FULLSCREEN", "FULLSCREEN_DIALOG", "TOOLTIP" }
 
-  local strataDropdown = CreateFrame("Frame", "SkyInfoTilesBuffTrackerStrataDropdown", scrollChild, "UIDropDownMenuTemplate")
-  strataDropdown:SetPoint("TOPLEFT", strataLabel, "BOTTOMLEFT", -15, -5)
-  UIDropDownMenu_SetWidth(strataDropdown, 150)
-
-  local function OnStrataSelect(self)
-    local value = self.value
-    if SkyInfoTiles.GetActiveTiles then
-      local tiles = SkyInfoTiles.GetActiveTiles()
-      for _, tile in ipairs(tiles) do
-        if tile.key == "bufftracker" or tile.type == "bufftracker" then
-          tile.strata = value
-          if SkyInfoTiles.Rebuild and SkyInfoTiles.UpdateAll then
-            SkyInfoTiles.Rebuild()
-            SkyInfoTiles.UpdateAll()
+  local strataRow, strataHeight, strataDropdown = W:CreateDropdown(scrollChild, yOffsetBuff, "Frame Strata (Layer)",
+    strataValues, strataOrder,
+    function()
+      if SkyInfoTiles.GetActiveTiles then
+        local tiles = SkyInfoTiles.GetActiveTiles()
+        for _, tile in ipairs(tiles) do
+          if tile.key == "bufftracker" or tile.type == "bufftracker" then
+            return tile.strata or "MEDIUM"
           end
-          break
         end
       end
-    end
-    UIDropDownMenu_SetText(strataDropdown, value)
-  end
-
-  UIDropDownMenu_Initialize(strataDropdown, function(self, level)
-    local strata = { "BACKGROUND", "LOW", "MEDIUM", "HIGH", "DIALOG", "FULLSCREEN", "FULLSCREEN_DIALOG", "TOOLTIP" }
-    for _, s in ipairs(strata) do
-      local info = UIDropDownMenu_CreateInfo()
-      info.text = s
-      info.value = s
-      info.func = OnStrataSelect
-      info.checked = false
-      UIDropDownMenu_AddButton(info, level)
-    end
-  end)
-
-  UIDropDownMenu_SetText(strataDropdown, "MEDIUM")
+      return "MEDIUM"
+    end,
+    function(value)
+      if SkyInfoTiles.GetActiveTiles then
+        local tiles = SkyInfoTiles.GetActiveTiles()
+        for _, tile in ipairs(tiles) do
+          if tile.key == "bufftracker" or tile.type == "bufftracker" then
+            tile.strata = value
+            if SkyInfoTiles.Rebuild and SkyInfoTiles.UpdateAll then
+              SkyInfoTiles.Rebuild()
+              SkyInfoTiles.UpdateAll()
+            end
+            break
+          end
+        end
+      end
+    end,
+    "Set the frame strata (layer) for buff tracker"
+  )
   buffTrackerTab.strataDropdown = strataDropdown
-
-  yOffsetBuff = yOffsetBuff - 60
+  yOffsetBuff = yOffsetBuff - strataHeight - 10
 
   -- Preview icon (shows what the tile looks like) - positioned first
   local previewFrame = CreateFrame("Frame", nil, scrollChild, "BackdropTemplate")
@@ -2752,111 +2822,103 @@ CreateOptionsWindow_Part2 = function(contentArea, tabContent, f, tabs)
   yOffsetBuff = yOffsetBuff - fontSizeH - 10
 
   -- Font dropdown
-  local fontLabel = scrollChild:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-  fontLabel:SetPoint("TOPLEFT", 10, yOffsetBuff)
-  fontLabel:SetText("Time Font:")
-  fontLabel:SetTextColor(1, 0.82, 0, 1)
+  local function DiscoverFonts()
+    if SkyInfoTiles.Utils and SkyInfoTiles.Utils.DiscoverFonts then
+      return SkyInfoTiles.Utils.DiscoverFonts()
+    end
+    -- Fallback to basic fonts
+    return {
+      { path = "Fonts\\FRIZQT__.ttf", name = "Friz Quadrata (Default)" },
+      { path = "Fonts\\ARIALN.ttf", name = "Arial Narrow" },
+      { path = "Fonts\\MORPHEUS.ttf", name = "Morpheus" },
+      { path = "Fonts\\skurri.ttf", name = "Skurri" },
+      { path = "Fonts\\theboldfont.ttf", name = "Bold Font" },
+    }
+  end
 
-  local fontDropdown = CreateFrame("Frame", "SkyInfoTilesBuffTrackerFontDropdown", scrollChild, "UIDropDownMenuTemplate")
-  fontDropdown:SetPoint("TOPLEFT", fontLabel, "BOTTOMLEFT", -15, -5)
-  UIDropDownMenu_SetWidth(fontDropdown, 200)
+  local fonts = DiscoverFonts()
+  local fontValues = {}
+  local fontOrder = {}
+  for _, fontInfo in ipairs(fonts) do
+    fontValues[fontInfo.path] = fontInfo.name
+    table.insert(fontOrder, fontInfo.path)
+  end
 
-  local function OnFontSelect(self)
-    local fontPath = self.value
-    if SkyInfoTiles.GetActiveTiles then
+  local fontRow, fontHeight, fontDropdown = W:CreateDropdown(scrollChild, yOffsetBuff, "Time Font",
+    fontValues, fontOrder,
+    function()
       local tiles = SkyInfoTiles.GetActiveTiles()
       for _, tile in ipairs(tiles) do
         if tile.key == "bufftracker" or tile.type == "bufftracker" then
-          tile.font = fontPath
-          if SkyInfoTiles.Rebuild and SkyInfoTiles.UpdateAll then
-            SkyInfoTiles.Rebuild()
-            SkyInfoTiles.UpdateAll()
-          end
-          if buffTrackerTab.UpdatePreview then
-            buffTrackerTab.UpdatePreview()
-          end
-          break
+          return tile.font or "Fonts\\FRIZQT__.ttf"
         end
       end
-    end
-    UIDropDownMenu_SetText(fontDropdown, self:GetText())
-  end
-
-  UIDropDownMenu_Initialize(fontDropdown, function(self, level)
-    -- Use global font discovery
-    local fonts = {}
-    if SkyInfoTiles.Utils and SkyInfoTiles.Utils.DiscoverFonts then
-      fonts = SkyInfoTiles.Utils.DiscoverFonts()
-    else
-      -- Fallback to basic fonts
-      fonts = {
-        { path = "Fonts\\FRIZQT__.ttf", name = "Friz Quadrata (Default)" },
-        { path = "Fonts\\ARIALN.ttf", name = "Arial Narrow" },
-        { path = "Fonts\\MORPHEUS.ttf", name = "Morpheus" },
-        { path = "Fonts\\skurri.ttf", name = "Skurri" },
-        { path = "Fonts\\theboldfont.ttf", name = "Bold Font" },
-      }
-    end
-
-    for _, font in ipairs(fonts) do
-      local info = UIDropDownMenu_CreateInfo()
-      info.text = font.name
-      info.value = font.path
-      info.func = OnFontSelect
-      info.checked = false
-      UIDropDownMenu_AddButton(info, level)
-    end
-  end)
-
-  UIDropDownMenu_SetText(fontDropdown, "Friz Quadrata (Default)")
+      return "Fonts\\FRIZQT__.ttf"
+    end,
+    function(value)
+      if SkyInfoTiles.GetActiveTiles then
+        local tiles = SkyInfoTiles.GetActiveTiles()
+        for _, tile in ipairs(tiles) do
+          if tile.key == "bufftracker" or tile.type == "bufftracker" then
+            tile.font = value
+            if SkyInfoTiles.Rebuild and SkyInfoTiles.UpdateAll then
+              SkyInfoTiles.Rebuild()
+              SkyInfoTiles.UpdateAll()
+            end
+            if buffTrackerTab.UpdatePreview then
+              buffTrackerTab.UpdatePreview()
+            end
+            break
+          end
+        end
+      end
+    end,
+    "Choose the font for buff timer text"
+  )
   buffTrackerTab.fontDropdown = fontDropdown
-
-  yOffsetBuff = yOffsetBuff - 60
+  yOffsetBuff = yOffsetBuff - fontHeight - 10
 
   -- Direction dropdown
-  local directionLabel = scrollChild:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-  directionLabel:SetPoint("TOPLEFT", 10, yOffsetBuff)
-  directionLabel:SetText("Icon Direction:")
-  directionLabel:SetTextColor(1, 0.82, 0, 1)
+  local directionValues = {
+    right = "right",
+    left = "left",
+    down = "down",
+    up = "up"
+  }
+  local directionOrder = { "right", "left", "down", "up" }
 
-  local directionDropdown = CreateFrame("Frame", "SkyInfoTilesBuffTrackerDirectionDropdown", scrollChild, "UIDropDownMenuTemplate")
-  directionDropdown:SetPoint("TOPLEFT", directionLabel, "BOTTOMLEFT", -15, -5)
-  UIDropDownMenu_SetWidth(directionDropdown, 150)
-
-  local function OnDirectionSelect(self)
-    local value = self.value
-    if SkyInfoTiles.GetActiveTiles then
-      local tiles = SkyInfoTiles.GetActiveTiles()
-      for _, tile in ipairs(tiles) do
-        if tile.key == "bufftracker" or tile.type == "bufftracker" then
-          tile.direction = value
-          if SkyInfoTiles.Rebuild and SkyInfoTiles.UpdateAll then
-            SkyInfoTiles.Rebuild()
-            SkyInfoTiles.UpdateAll()
+  local directionRow, directionHeight, directionDropdown = W:CreateDropdown(scrollChild, yOffsetBuff, "Icon Direction",
+    directionValues, directionOrder,
+    function()
+      if SkyInfoTiles.GetActiveTiles then
+        local tiles = SkyInfoTiles.GetActiveTiles()
+        for _, tile in ipairs(tiles) do
+          if tile.key == "bufftracker" or tile.type == "bufftracker" then
+            return tile.direction or "right"
           end
-          break
         end
       end
-    end
-    UIDropDownMenu_SetText(directionDropdown, value)
-  end
-
-  UIDropDownMenu_Initialize(directionDropdown, function(self, level)
-    local directions = { "right", "left", "down", "up" }
-    for _, d in ipairs(directions) do
-      local info = UIDropDownMenu_CreateInfo()
-      info.text = d
-      info.value = d
-      info.func = OnDirectionSelect
-      info.checked = false
-      UIDropDownMenu_AddButton(info, level)
-    end
-  end)
-
-  UIDropDownMenu_SetText(directionDropdown, "right")
+      return "right"
+    end,
+    function(value)
+      if SkyInfoTiles.GetActiveTiles then
+        local tiles = SkyInfoTiles.GetActiveTiles()
+        for _, tile in ipairs(tiles) do
+          if tile.key == "bufftracker" or tile.type == "bufftracker" then
+            tile.direction = value
+            if SkyInfoTiles.Rebuild and SkyInfoTiles.UpdateAll then
+              SkyInfoTiles.Rebuild()
+              SkyInfoTiles.UpdateAll()
+            end
+            break
+          end
+        end
+      end
+    end,
+    "Choose which direction icons expand in"
+  )
   buffTrackerTab.directionDropdown = directionDropdown
-
-  yOffsetBuff = yOffsetBuff - 60
+  yOffsetBuff = yOffsetBuff - directionHeight - 10
 
   -- Function to update preview based on current settings
   local function UpdatePreview()
@@ -3113,6 +3175,18 @@ CreateOptionsWindow_Part2 = function(contentArea, tabContent, f, tabs)
   profilesTab:Hide()
   tabContent[10] = profilesTab
 
+  -- Add scrollFrame for consistent width
+  local scrollFrame = CreateFrame("ScrollFrame", nil, profilesTab, "UIPanelScrollFrameTemplate")
+  scrollFrame:SetPoint("TOPLEFT", 5, -10)
+  scrollFrame:SetPoint("BOTTOMRIGHT", -25, 10)
+
+  local scrollChild = CreateFrame("Frame", nil, scrollFrame)
+  scrollChild:SetSize(580, 800)
+  scrollFrame:SetScrollChild(scrollChild)
+
+  profilesTab.scrollFrame = scrollFrame
+  profilesTab.scrollChild = scrollChild
+
   local yOffset = -10
 
   -- Character info label
@@ -3120,91 +3194,78 @@ CreateOptionsWindow_Part2 = function(contentArea, tabContent, f, tabs)
   local realmName = GetRealmName() or "Unknown"
   local charKey = charName .. "-" .. realmName
 
-  local charLabel = profilesTab:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
-  charLabel:SetPoint("TOPLEFT", 10, yOffset)
+  local charLabel = scrollChild:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
+  charLabel:SetPoint("TOPLEFT", scrollChild, "TOPLEFT", 10, yOffset)
   charLabel:SetText("Profile for " .. charKey .. ":")
   charLabel:SetTextColor(1, 0.82, 0, 1)
   yOffset = yOffset - 30
 
-  -- Profile selection dropdown
-  local profileDropdown = CreateFrame("Frame", "SkyInfoTilesProfileDropdown", profilesTab, "UIDropDownMenuTemplate")
-  profileDropdown:SetPoint("TOPLEFT", 10, yOffset)
-
-  UIDropDownMenu_SetWidth(profileDropdown, 200)
-  UIDropDownMenu_Initialize(profileDropdown, function(self, level)
-    if not SkyInfoTiles.GetActiveProfileName or not SkyInfoTiles.ListProfiles then
-      return
-    end
-
-    local activeProfile = SkyInfoTiles.GetActiveProfileName()
-    local profiles = SkyInfoTiles.ListProfiles()
-
-    if not profiles or #profiles == 0 then
-      -- Add a default entry if no profiles exist
-      local info = UIDropDownMenu_CreateInfo()
-      info.text = "Default"
-      info.value = "Default"
-      info.checked = true
-      info.func = function() end
-      UIDropDownMenu_AddButton(info, level)
-      return
-    end
-
+  -- Profile selection dropdown (styled)
+  -- Build values and order from profile list
+  local function GetProfileValues()
+    local profiles = SkyInfoTiles.ListProfiles and SkyInfoTiles.ListProfiles() or {"Default"}
+    local values = {}
+    local order = {}
     for _, name in ipairs(profiles) do
-      local info = UIDropDownMenu_CreateInfo()
-      info.text = name == "Default" and name .. " (Default)" or name
-      info.value = name
-      info.checked = (name == activeProfile)
-      info.func = function()
-        local success, err = SkyInfoTiles.SetActiveProfile(name)
-        if success then
-          UIDropDownMenu_SetText(profileDropdown, info.text)
-          if SkyInfoTiles._OptionsRefresh then
-            SkyInfoTiles._OptionsRefresh()
-          end
-        else
-          print("|cff66ccffSkyInfoTiles:|r " .. tostring(err))
-        end
-      end
-      UIDropDownMenu_AddButton(info, level)
+      local displayText = name == "Default" and name .. " (Default)" or name
+      values[name] = displayText
+      table.insert(order, name)
     end
-  end)
-
-  -- Set initial text
-  if SkyInfoTiles.GetActiveProfileName then
-    local activeProfile = SkyInfoTiles.GetActiveProfileName()
-    local displayText = activeProfile == "Default" and "Default (Default)" or activeProfile
-    UIDropDownMenu_SetText(profileDropdown, displayText)
-  else
-    UIDropDownMenu_SetText(profileDropdown, "Default")
+    return values, order
   end
 
+  local profileValues, profileOrder = GetProfileValues()
+  local profileRow, profileHeight, profileDropdown = W:CreateDropdown(scrollChild, yOffset, "Active Profile",
+    profileValues, profileOrder,
+    function()
+      return SkyInfoTiles.GetActiveProfileName and SkyInfoTiles.GetActiveProfileName() or "Default"
+    end,
+    function(value)
+      local success, err = SkyInfoTiles.SetActiveProfile(value)
+      if success then
+        -- Refresh dropdown to show new profile list (in case it changed)
+        local newValues, newOrder = GetProfileValues()
+        profileDropdown._values = newValues
+        profileDropdown._order = newOrder
+        if profileDropdown.Refresh then
+          profileDropdown:Refresh()
+        end
+        if SkyInfoTiles._OptionsRefresh then
+          SkyInfoTiles._OptionsRefresh()
+        end
+      else
+        print("|cff66ccffSkyInfoTiles:|r " .. tostring(err))
+      end
+    end,
+    "Select the active profile for this character"
+  )
+
   profilesTab.profileDropdown = profileDropdown
-  yOffset = yOffset - 50
+  yOffset = yOffset - profileHeight - 10
 
   -- Separator
-  local sep1 = profilesTab:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-  sep1:SetPoint("TOPLEFT", 10, yOffset)
+  local sep1 = scrollChild:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+  sep1:SetPoint("TOPLEFT", scrollChild, "TOPLEFT", 10, yOffset)
   sep1:SetText("-----------------------------------")
   sep1:SetTextColor(0.5, 0.5, 0.5, 1)
   yOffset = yOffset - 30
 
   -- Manage profiles label
-  local manageLabel = profilesTab:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
-  manageLabel:SetPoint("TOPLEFT", 10, yOffset)
+  local manageLabel = scrollChild:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
+  manageLabel:SetPoint("TOPLEFT", scrollChild, "TOPLEFT", 10, yOffset)
   manageLabel:SetText("Manage Global Profiles:")
   manageLabel:SetTextColor(1, 0.82, 0, 1)
   yOffset = yOffset - 30
 
   -- Profile list label
-  local listLabel = profilesTab:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-  listLabel:SetPoint("TOPLEFT", 10, yOffset)
+  local listLabel = scrollChild:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+  listLabel:SetPoint("TOPLEFT", scrollChild, "TOPLEFT", 10, yOffset)
   listLabel:SetText("Available Profiles:")
   yOffset = yOffset - 25
 
   -- Profile list (simple text list)
-  local profileListText = profilesTab:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-  profileListText:SetPoint("TOPLEFT", 20, yOffset)
+  local profileListText = scrollChild:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+  profileListText:SetPoint("TOPLEFT", scrollChild, "TOPLEFT", 20, yOffset)
   profileListText:SetJustifyH("LEFT")
   profileListText:SetWidth(300)
   profileListText:SetText("Loading...")
@@ -3215,9 +3276,9 @@ CreateOptionsWindow_Part2 = function(contentArea, tabContent, f, tabs)
   local buttonY = yOffset
 
   -- New Profile button
-  local newBtn = CreateFrame("Button", nil, profilesTab, "UIPanelButtonTemplate")
+  local newBtn = CreateFrame("Button", nil, scrollChild, "UIPanelButtonTemplate")
   newBtn:SetSize(100, 25)
-  newBtn:SetPoint("TOPLEFT", 10, buttonY)
+  newBtn:SetPoint("TOPLEFT", scrollChild, "TOPLEFT", 10, buttonY)
   newBtn:SetText("New")
   newBtn:SetScript("OnClick", function()
     -- Open dialog for new profile
@@ -3225,7 +3286,7 @@ CreateOptionsWindow_Part2 = function(contentArea, tabContent, f, tabs)
   end)
 
   -- Rename Profile button
-  local renameBtn = CreateFrame("Button", nil, profilesTab, "UIPanelButtonTemplate")
+  local renameBtn = CreateFrame("Button", nil, scrollChild, "UIPanelButtonTemplate")
   renameBtn:SetSize(100, 25)
   renameBtn:SetPoint("LEFT", newBtn, "RIGHT", 10, 0)
   renameBtn:SetText("Rename")
@@ -3239,7 +3300,7 @@ CreateOptionsWindow_Part2 = function(contentArea, tabContent, f, tabs)
   end)
 
   -- Delete Profile button
-  local deleteBtn = CreateFrame("Button", nil, profilesTab, "UIPanelButtonTemplate")
+  local deleteBtn = CreateFrame("Button", nil, scrollChild, "UIPanelButtonTemplate")
   deleteBtn:SetSize(100, 25)
   deleteBtn:SetPoint("LEFT", renameBtn, "RIGHT", 10, 0)
   deleteBtn:SetText("Delete")
@@ -3464,19 +3525,10 @@ local function RefreshOptionsWindow()
 
   for _, tileInfo in ipairs(tilesWithStrata) do
     if f.tabContent and f.tabContent[tileInfo.index] and f.tabContent[tileInfo.index].strataDropdown then
-      local strata = "MEDIUM" -- Default
-
-      if SkyInfoTiles.GetActiveTiles then
-        local tiles = SkyInfoTiles.GetActiveTiles()
-        for _, tile in ipairs(tiles) do
-          if tile.key == tileInfo.key or tile.type == tileInfo.key then
-            strata = tile.strata or "MEDIUM"
-            break
-          end
-        end
+      local dropdown = f.tabContent[tileInfo.index].strataDropdown
+      if dropdown.Refresh then
+        dropdown:Refresh()
       end
-
-      UIDropDownMenu_SetText(f.tabContent[tileInfo.index].strataDropdown, strata)
     end
   end
 
@@ -3613,39 +3665,14 @@ local function RefreshOptionsWindow()
       infobarTab.showBorderCheck._programmaticChange = false
     end
 
-    if infobarTab.soundDropdown then
-      local soundNames = {
-        FRIENDS_ONLINE = "Friend Online (Recommended)",
-        WOW_LOGIN = "WoW Login Sound",
-        LEVEL_UP = "Level Up",
-        READY_CHECK = "Ready Check",
-        RAID_WARNING = "Raid Warning",
-        PVP_ENTER_QUEUE = "PvP Queue Pop (Loud)",
-        TELL_MESSAGE = "Whisper",
-        AUCTION_WINDOW_OPEN = "Pleasant Pling",
-        LOOT_WINDOW_COIN_SOUND = "Coin Drop",
-        QUEST_COMPLETE = "Quest Complete",
-        ACHIEVEMENT_MENU_OPEN = "Achievement",
-        UI_LEGENDARY_FORGE = "Legendary Item",
-        UI_PROFESSION_DING = "Profession Ding",
-        ALARM_CLOCK_WARNING_1 = "Alarm Bell 1 (Loud)",
-        ALARM_CLOCK_WARNING_2 = "Alarm Bell 2 (Loud)",
-        ALARM_CLOCK_WARNING_3 = "Alarm Bell 3 (Loud)",
-        CUSTOM = "Custom Sound File",
-        NONE = "No Sound"
-      }
-      UIDropDownMenu_SetText(infobarTab.soundDropdown, soundNames[onlineSound] or "Friend Online (Recommended)")
+    -- Refresh sound dropdown
+    if infobarTab.soundDropdown and infobarTab.soundDropdown.Refresh then
+      infobarTab.soundDropdown:Refresh()
     end
 
-    if infobarTab.channelDropdown then
-      local channelNames = {
-        Master = "Master",
-        SFX = "Sound Effects",
-        Music = "Music",
-        Ambience = "Ambience",
-        Dialog = "Dialog"
-      }
-      UIDropDownMenu_SetText(infobarTab.channelDropdown, channelNames[soundChannel] or "Master")
+    -- Refresh channel dropdown
+    if infobarTab.channelDropdown and infobarTab.channelDropdown.Refresh then
+      infobarTab.channelDropdown:Refresh()
     end
 
     if infobarTab.customSoundEditBox then
@@ -3657,11 +3684,9 @@ local function RefreshOptionsWindow()
   if f.tabContent and f.tabContent[10] then
     local profilesTab = f.tabContent[10]
 
-    -- Update profile dropdown
-    if profilesTab.profileDropdown and SkyInfoTiles.GetActiveProfileName then
-      local activeProfile = SkyInfoTiles.GetActiveProfileName()
-      local displayText = activeProfile == "Default" and "Default (Default)" or activeProfile
-      UIDropDownMenu_SetText(profilesTab.profileDropdown, displayText)
+    -- Update profile dropdown using Refresh method
+    if profilesTab.profileDropdown and profilesTab.profileDropdown.Refresh then
+      profilesTab.profileDropdown:Refresh()
     end
 
     -- Update profile list

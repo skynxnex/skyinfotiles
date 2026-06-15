@@ -311,226 +311,6 @@ function Widgets:CreateButton(parent, yOffset, text, width, onClick, tooltipText
 end
 
 -------------------------------------------------------------------------------
--- Dropdown (styled dropdown menu)
--------------------------------------------------------------------------------
-function Widgets:CreateDropdown(parent, yOffset, labelText, values, order, getValue, setValue, tooltipText)
-  local row = CreateFrame("Frame", nil, parent)
-  row:SetPoint("TOPLEFT", parent, "TOPLEFT", 10, yOffset)
-  row:SetSize(parent:GetWidth() - 20, 50)
-
-  -- Label
-  local label = row:CreateFontString(nil, "OVERLAY")
-  label:SetFont(FONT, 12, "OUTLINE")
-  label:SetTextColor(ACCENT_COLOR.r, ACCENT_COLOR.g, ACCENT_COLOR.b)
-  label:SetPoint("TOPLEFT", row, "TOPLEFT", 0, 0)
-  label:SetText(labelText)
-
-  -- Dropdown button
-  local DD_W, DD_H = 250, 30
-  local ddBtn = CreateFrame("Button", nil, row)
-  ddBtn:SetSize(DD_W, DD_H)
-  ddBtn:SetPoint("TOPLEFT", label, "BOTTOMLEFT", 0, -10)
-
-  -- Background
-  local bg = CreateSolidTexture(ddBtn, "BACKGROUND", 0.15, 0.15, 0.18, 0.9)
-  bg:SetAllPoints()
-
-  -- Border
-  local border = CreateFrame("Frame", nil, ddBtn)
-  border:SetAllPoints()
-  local borderTex = CreateSolidTexture(border, "ARTWORK", BORDER_COLOR.r, BORDER_COLOR.g, BORDER_COLOR.b, 0.6)
-  borderTex:SetPoint("TOPLEFT", 0, 0)
-  borderTex:SetPoint("TOPRIGHT", 0, 0)
-  borderTex:SetHeight(1)
-  local borderTex2 = CreateSolidTexture(border, "ARTWORK", BORDER_COLOR.r, BORDER_COLOR.g, BORDER_COLOR.b, 0.6)
-  borderTex2:SetPoint("BOTTOMLEFT", 0, 0)
-  borderTex2:SetPoint("BOTTOMRIGHT", 0, 0)
-  borderTex2:SetHeight(1)
-
-  -- Dropdown label (selected value)
-  local ddLbl = ddBtn:CreateFontString(nil, "OVERLAY")
-  ddLbl:SetFont(FONT, 12, "OUTLINE")
-  ddLbl:SetTextColor(TEXT_WHITE.r, TEXT_WHITE.g, TEXT_WHITE.b)
-  ddLbl:SetJustifyH("LEFT")
-  ddLbl:SetPoint("LEFT", ddBtn, "LEFT", 12, 0)
-  ddLbl:SetPoint("RIGHT", ddBtn, "RIGHT", -20, 0)
-
-  -- Arrow (simple down arrow)
-  local arrow = ddBtn:CreateTexture(nil, "OVERLAY")
-  arrow:SetTexture("Interface\\ChatFrame\\ChatFrameExpandArrow")
-  arrow:SetSize(12, 12)
-  arrow:SetPoint("RIGHT", ddBtn, "RIGHT", -8, 0)
-  arrow:SetRotation(math.rad(90)) -- Point down
-
-  -- Order: if not provided, extract keys from values
-  if not order then
-    order = {}
-    for key in pairs(values) do
-      table.insert(order, key)
-    end
-  end
-
-  -- Create menu frame (initially hidden)
-  local menu = CreateFrame("Frame", nil, ddBtn, "BackdropTemplate")
-  menu:SetSize(DD_W, 200) -- Max height, will be adjusted
-  menu:SetPoint("TOPLEFT", ddBtn, "BOTTOMLEFT", 0, -2)
-  menu:SetFrameStrata("DIALOG")
-  menu:SetFrameLevel(ddBtn:GetFrameLevel() + 10)
-  menu:Hide()
-
-  -- Menu background
-  menu:SetBackdrop({
-    bgFile = "Interface\\Buttons\\WHITE8X8",
-    edgeFile = "Interface\\Buttons\\WHITE8X8",
-    tile = false,
-    edgeSize = 1,
-    insets = { left = 1, right = 1, top = 1, bottom = 1 }
-  })
-  menu:SetBackdropColor(0.1, 0.1, 0.12, 0.95)
-  menu:SetBackdropBorderColor(BORDER_COLOR.r, BORDER_COLOR.g, BORDER_COLOR.b, 1)
-
-  -- Scroll frame for menu items
-  local scrollFrame = CreateFrame("ScrollFrame", nil, menu, "UIPanelScrollFrameTemplate")
-  scrollFrame:SetPoint("TOPLEFT", 2, -2)
-  scrollFrame:SetPoint("BOTTOMRIGHT", -22, 2)
-
-  local scrollChild = CreateFrame("Frame", nil, scrollFrame)
-  scrollChild:SetSize(DD_W - 26, 1) -- Height set dynamically
-  scrollFrame:SetScrollChild(scrollChild)
-
-  -- Create menu items
-  local menuItems = {}
-  local itemHeight = 26
-  local function BuildMenu()
-    -- Clear old items
-    for _, item in ipairs(menuItems) do
-      item:Hide()
-      item:SetParent(nil)
-    end
-    menuItems = {}
-
-    local yPos = 0
-    for i, key in ipairs(order) do
-      local displayText = values[key]
-      if type(displayText) == "table" then
-        displayText = displayText.text or displayText[1] or tostring(key)
-      end
-
-      local item = CreateFrame("Button", nil, scrollChild)
-      item:SetSize(DD_W - 26, itemHeight)
-      item:SetPoint("TOPLEFT", scrollChild, "TOPLEFT", 0, yPos)
-
-      -- Item background
-      local itemBg = CreateSolidTexture(item, "BACKGROUND", 0.1, 0.1, 0.12, 0)
-      itemBg:SetAllPoints()
-
-      -- Item text
-      local itemText = item:CreateFontString(nil, "OVERLAY")
-      itemText:SetFont(FONT, 12, "OUTLINE")
-      itemText:SetTextColor(TEXT_WHITE.r, TEXT_WHITE.g, TEXT_WHITE.b)
-      itemText:SetPoint("LEFT", item, "LEFT", 8, 0)
-      itemText:SetText(displayText)
-
-      -- Hover effect
-      item:SetScript("OnEnter", function()
-        itemBg:SetColorTexture(ACCENT_COLOR.r, ACCENT_COLOR.g, ACCENT_COLOR.b, 0.3)
-        itemText:SetTextColor(ACCENT_COLOR.r, ACCENT_COLOR.g, ACCENT_COLOR.b)
-      end)
-      item:SetScript("OnLeave", function()
-        itemBg:SetColorTexture(0.1, 0.1, 0.12, 0)
-        itemText:SetTextColor(TEXT_WHITE.r, TEXT_WHITE.g, TEXT_WHITE.b)
-      end)
-
-      -- Click handler
-      item:SetScript("OnClick", function()
-        setValue(key)
-        ddLbl:SetText(displayText)
-        menu:Hide()
-      end)
-
-      menuItems[i] = item
-      yPos = yPos - itemHeight
-    end
-
-    -- Set scroll child height
-    scrollChild:SetHeight(math.max(1, #order * itemHeight))
-
-    -- Adjust menu height to fit items (max 200px)
-    local totalHeight = #order * itemHeight + 4
-    menu:SetHeight(math.min(totalHeight, 200))
-  end
-
-  -- Build menu initially
-  BuildMenu()
-
-  -- Update label with current value
-  local function UpdateLabel()
-    local currentValue = getValue()
-    local displayText = values[currentValue]
-    if type(displayText) == "table" then
-      displayText = displayText.text or displayText[1] or tostring(currentValue)
-    end
-    ddLbl:SetText(displayText or tostring(currentValue))
-  end
-  UpdateLabel()
-
-  -- Toggle menu on click
-  ddBtn:SetScript("OnClick", function()
-    if menu:IsShown() then
-      menu:Hide()
-    else
-      menu:Show()
-      UpdateLabel()
-    end
-  end)
-
-  -- Hide menu when clicking outside
-  menu:SetScript("OnHide", function()
-    arrow:SetRotation(math.rad(90))
-  end)
-  menu:SetScript("OnShow", function()
-    arrow:SetRotation(math.rad(-90))
-  end)
-
-  -- Close menu when parent hides
-  ddBtn:SetScript("OnHide", function()
-    menu:Hide()
-  end)
-
-  -- Hover effects on button
-  ddBtn:SetScript("OnEnter", function()
-    bg:SetColorTexture(0.2, 0.2, 0.25, 0.9)
-    borderTex:SetColorTexture(ACCENT_COLOR.r, ACCENT_COLOR.g, ACCENT_COLOR.b, 0.8)
-    borderTex2:SetColorTexture(ACCENT_COLOR.r, ACCENT_COLOR.g, ACCENT_COLOR.b, 0.8)
-    if tooltipText then
-      GameTooltip:SetOwner(ddBtn, "ANCHOR_RIGHT")
-      GameTooltip:SetText(tooltipText, 1, 1, 1)
-      GameTooltip:Show()
-    end
-  end)
-  ddBtn:SetScript("OnLeave", function()
-    if not menu:IsShown() then
-      bg:SetColorTexture(0.15, 0.15, 0.18, 0.9)
-      borderTex:SetColorTexture(BORDER_COLOR.r, BORDER_COLOR.g, BORDER_COLOR.b, 0.6)
-      borderTex2:SetColorTexture(BORDER_COLOR.r, BORDER_COLOR.g, BORDER_COLOR.b, 0.6)
-    end
-    GameTooltip:Hide()
-  end)
-
-  -- Refresh function
-  ddBtn.Refresh = function()
-    UpdateLabel()
-    BuildMenu()
-  end
-
-  -- Store references
-  ddBtn._menu = menu
-  ddBtn._label = ddLbl
-
-  return row, 55, ddBtn
-end
-
--------------------------------------------------------------------------------
 -- Slider (styled horizontal slider with number box)
 -------------------------------------------------------------------------------
 function Widgets:CreateSlider(parent, yOffset, labelText, min, max, step, getValue, setValue, tooltipText)
@@ -769,4 +549,226 @@ function Widgets:CreateSlider(parent, yOffset, labelText, min, max, step, getVal
   row.slider = slider  -- Store slider reference for refresh
 
   return row, 55, slider
+end
+
+-------------------------------------------------------------------------------
+-- Dropdown (styled dropdown menu)
+-------------------------------------------------------------------------------
+function Widgets:CreateDropdown(parent, yOffset, labelText, values, order, getValue, setValue, tooltipText)
+  local row = CreateFrame("Frame", nil, parent)
+  row:SetPoint("TOPLEFT", parent, "TOPLEFT", 10, yOffset)
+  row:SetSize(parent:GetWidth() - 20, 30)
+
+  -- Label
+  local label = row:CreateFontString(nil, "OVERLAY")
+  label:SetFont(FONT, 12, "OUTLINE")
+  label:SetTextColor(TEXT_WHITE.r, TEXT_WHITE.g, TEXT_WHITE.b)
+  label:SetPoint("LEFT", row, "LEFT", 0, 0)
+  label:SetText(labelText)
+
+  -- Dropdown button (fixed width like Ellesmere)
+  local BUTTON_W, BUTTON_H = 200, 30
+  local dropdown = CreateFrame("Button", nil, row)
+  dropdown:SetSize(BUTTON_W, BUTTON_H)
+  dropdown:SetPoint("RIGHT", row, "RIGHT", 0, 0)
+
+  -- Background
+  local bg = CreateSolidTexture(dropdown, "BACKGROUND", 0.15, 0.15, 0.18, 0.9)
+  bg:SetAllPoints()
+
+  -- Border
+  local border = CreateSolidTexture(dropdown, "ARTWORK", BORDER_COLOR.r, BORDER_COLOR.g, BORDER_COLOR.b, 0.6)
+  border:SetPoint("TOPLEFT", 0, 0)
+  border:SetPoint("TOPRIGHT", 0, 0)
+  border:SetHeight(1)
+
+  local border2 = CreateSolidTexture(dropdown, "ARTWORK", BORDER_COLOR.r, BORDER_COLOR.g, BORDER_COLOR.b, 0.6)
+  border2:SetPoint("BOTTOMLEFT", 0, 0)
+  border2:SetPoint("BOTTOMRIGHT", 0, 0)
+  border2:SetHeight(1)
+
+  -- Arrow (using Blizzard's built-in ChatFrameExpandArrow)
+  local arrow = dropdown:CreateTexture(nil, "OVERLAY")
+  arrow:SetTexture("Interface\\ChatFrame\\ChatFrameExpandArrow")
+  arrow:SetSize(16, 16)
+  arrow:SetPoint("RIGHT", dropdown, "RIGHT", -8, 0)
+  arrow:SetVertexColor(ACCENT_COLOR.r, ACCENT_COLOR.g, ACCENT_COLOR.b)
+
+  -- Helper function to flip arrow direction
+  arrow.SetDirection = function(self, direction)
+    if direction == "up" then
+      -- Rotate 90° counterclockwise (pointing up)
+      self:SetRotation(math.rad(-90))
+    else
+      -- Rotate 90° clockwise (pointing down)
+      self:SetRotation(math.rad(90))
+    end
+  end
+
+  -- Set initial direction to down
+  arrow:SetDirection("down")
+
+  -- Selected text
+  local selectedText = dropdown:CreateFontString(nil, "OVERLAY")
+  selectedText:SetFont(FONT, 11, "OUTLINE")
+  selectedText:SetTextColor(TEXT_WHITE.r, TEXT_WHITE.g, TEXT_WHITE.b)
+  selectedText:SetPoint("LEFT", dropdown, "LEFT", 8, 0)
+  selectedText:SetPoint("RIGHT", arrow, "LEFT", -4, 0)
+  selectedText:SetJustifyH("LEFT")
+  selectedText:SetWordWrap(false)
+
+  -- Menu frame
+  local menu = CreateFrame("Frame", nil, dropdown, "BackdropTemplate")
+  menu:SetFrameStrata("FULLSCREEN_DIALOG")
+  menu:SetFrameLevel(dropdown:GetFrameLevel() + 10)
+  menu:Hide()
+
+  menu:SetBackdrop({
+    bgFile = "Interface\\Buttons\\WHITE8X8",
+    edgeFile = "Interface\\Buttons\\WHITE8X8",
+    tile = false,
+    edgeSize = 1,
+    insets = { left = 1, right = 1, top = 1, bottom = 1 }
+  })
+  menu:SetBackdropColor(0.15, 0.15, 0.18, 0.98)
+  menu:SetBackdropBorderColor(BORDER_COLOR.r, BORDER_COLOR.g, BORDER_COLOR.b, 0.8)
+
+  -- Menu scroll frame
+  local scrollFrame = CreateFrame("ScrollFrame", nil, menu, "UIPanelScrollFrameTemplate")
+  scrollFrame:SetPoint("TOPLEFT", 2, -2)
+  scrollFrame:SetPoint("BOTTOMRIGHT", -2, 2)
+
+  local scrollChild = CreateFrame("Frame", nil, scrollFrame)
+  scrollFrame:SetScrollChild(scrollChild)
+
+  local menuItems = {}
+
+  local function CloseMenu()
+    menu:Hide()
+    arrow:SetDirection("down")
+  end
+
+  local function OpenMenu()
+    -- Position menu below button
+    menu:ClearAllPoints()
+    menu:SetPoint("TOPLEFT", dropdown, "BOTTOMLEFT", 0, -2)
+    menu:SetWidth(BUTTON_W)
+
+    -- Calculate menu height (max 200px)
+    local itemHeight = 25
+    local maxHeight = 200
+    local totalHeight = #order * itemHeight
+    local menuHeight = math.min(totalHeight, maxHeight)
+    menu:SetHeight(menuHeight)
+    scrollChild:SetSize(BUTTON_W - 4, totalHeight)
+
+    -- Clear old items
+    for _, item in ipairs(menuItems) do
+      item:Hide()
+      item:SetParent(nil)
+    end
+    menuItems = {}
+
+    -- Create menu items
+    local currentValue = getValue()
+    for i, key in ipairs(order) do
+      local item = CreateFrame("Button", nil, scrollChild)
+      item:SetSize(BUTTON_W - 4, itemHeight)
+      item:SetPoint("TOPLEFT", 0, -(i - 1) * itemHeight)
+
+      -- Background
+      local itemBg = CreateSolidTexture(item, "BACKGROUND", 0.15, 0.15, 0.18, 0)
+      itemBg:SetAllPoints()
+      item.bg = itemBg
+
+      -- Text
+      local itemText = item:CreateFontString(nil, "OVERLAY")
+      itemText:SetFont(FONT, 11, "OUTLINE")
+      itemText:SetTextColor(TEXT_WHITE.r, TEXT_WHITE.g, TEXT_WHITE.b)
+      itemText:SetPoint("LEFT", item, "LEFT", 8, 0)
+      itemText:SetText(values[key] or key)
+
+      -- Highlight selected item
+      if currentValue == key then
+        itemText:SetTextColor(ACCENT_COLOR.r, ACCENT_COLOR.g, ACCENT_COLOR.b)
+      end
+
+      -- Hover effect
+      item:SetScript("OnEnter", function(self)
+        self.bg:SetColorTexture(ACCENT_COLOR.r, ACCENT_COLOR.g, ACCENT_COLOR.b, 0.3)
+      end)
+      item:SetScript("OnLeave", function(self)
+        self.bg:SetColorTexture(0.15, 0.15, 0.18, 0)
+      end)
+
+      -- Click handler
+      item:SetScript("OnClick", function()
+        setValue(key)
+        selectedText:SetText(values[key] or key)
+        CloseMenu()
+      end)
+
+      table.insert(menuItems, item)
+    end
+
+    menu:Show()
+    arrow:SetDirection("up")
+  end
+
+  -- Toggle menu on click
+  dropdown:SetScript("OnClick", function()
+    if menu:IsShown() then
+      CloseMenu()
+    else
+      OpenMenu()
+    end
+  end)
+
+  menu:EnableMouse(true)
+  menu:SetScript("OnMouseDown", function(self, button)
+    -- Prevent clicks on menu from closing it
+  end)
+
+  -- Close menu when clicking outside (Ellesmere pattern)
+  menu:SetScript("OnShow", function(self)
+    arrow:SetDirection("up")
+    self:SetScript("OnUpdate", function(m)
+      if not m:IsMouseOver() and not dropdown:IsMouseOver() and IsMouseButtonDown("LeftButton") then
+        CloseMenu()
+      end
+    end)
+  end)
+
+  menu:SetScript("OnHide", function(self)
+    arrow:SetDirection("down")
+    self:SetScript("OnUpdate", nil)
+  end)
+
+  -- Hover effect on button
+  dropdown:SetScript("OnEnter", function()
+    bg:SetColorTexture(0.18, 0.18, 0.21, 0.9)
+    if tooltipText then
+      GameTooltip:SetOwner(dropdown, "ANCHOR_RIGHT")
+      GameTooltip:SetText(tooltipText, 1, 1, 1)
+      GameTooltip:Show()
+    end
+  end)
+  dropdown:SetScript("OnLeave", function()
+    bg:SetColorTexture(0.15, 0.15, 0.18, 0.9)
+    GameTooltip:Hide()
+  end)
+
+  -- Update visual
+  local function UpdateVisual()
+    local value = getValue()
+    selectedText:SetText(values[value] or value or "")
+  end
+
+  -- Initial update
+  UpdateVisual()
+
+  -- Store refresh function
+  dropdown.Refresh = UpdateVisual
+
+  return row, 35, dropdown
 end
