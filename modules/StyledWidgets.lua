@@ -15,15 +15,31 @@ SkyInfoTiles.StyledWidgets = Widgets
 print("SkyInfoTiles: StyledWidgets loaded successfully!")
 
 -------------------------------------------------------------------------------
--- Visual Constants
+-- Visual Constants - Sci-Fi Modern Theme
 -------------------------------------------------------------------------------
-local ACCENT_COLOR = { r = 0.4, g = 0.8, b = 1.0 }  -- Sky blue accent
-local DARK_BG = { r = 0.1, g = 0.1, b = 0.12, a = 0.95 }
-local BORDER_COLOR = { r = 0.3, g = 0.3, b = 0.35, a = 1.0 }
-local TEXT_WHITE = { r = 1, g = 1, b = 1 }
-local TEXT_DIM = { r = 0.7, g = 0.7, b = 0.7 }
-local ROW_BG_EVEN = { r = 0.15, g = 0.15, b = 0.18, a = 0.3 }
-local ROW_BG_ODD = { r = 0.12, g = 0.12, b = 0.14, a = 0.3 }
+-- Primary accent (sky blue - SkyInfoTiles identity)
+local ACCENT_COLOR = { r = 0.4, g = 0.8, b = 1.0 }
+
+-- Ultra-dark backgrounds (Ellesmere-inspired)
+local BG_ULTRA_DARK = { r = 0.05, g = 0.07, b = 0.09, a = 0.98 }  -- Main panels
+local BG_DARKEST = { r = 0.02, g = 0.03, b = 0.04, a = 0.95 }     -- Input boxes
+local BG_DARK = { r = 0.075, g = 0.095, b = 0.115, a = 0.9 }      -- Buttons/dropdowns
+
+-- Subtle borders (white with low opacity)
+local BORDER_SUBTLE = { r = 1, g = 1, b = 1, a = 0.05 }  -- Inactive
+local BORDER_ACTIVE = { r = 1, g = 1, b = 1, a = 0.15 }  -- Hover/active
+
+-- Text colors (white with varying opacity)
+local TEXT_BRIGHT = { r = 1, g = 1, b = 1, a = 1.0 }     -- Headers
+local TEXT_NORMAL = { r = 1, g = 1, b = 1, a = 0.7 }     -- Labels
+local TEXT_DIM = { r = 1, g = 1, b = 1, a = 0.45 }       -- Secondary text
+
+-- Legacy compatibility (keep but point to new constants)
+local DARK_BG = BG_ULTRA_DARK
+local BORDER_COLOR = BORDER_SUBTLE
+local TEXT_WHITE = TEXT_BRIGHT
+local ROW_BG_EVEN = { r = 0.05, g = 0.06, b = 0.07, a = 0.05 }  -- Much subtler
+local ROW_BG_ODD = { r = 0.04, g = 0.05, b = 0.06, a = 0.05 }
 
 -- Toggle colors
 local TOGGLE_OFF = { track = {r=0.2, g=0.2, b=0.22, a=0.8}, knob = {r=0.5, g=0.5, b=0.5, a=0.9} }
@@ -69,11 +85,17 @@ function Widgets:CreateSectionHeader(parent, yOffset, text)
   header:SetPoint("TOPLEFT", parent, "TOPLEFT", 10, yOffset)
   header:SetText(text)
 
-  -- Divider line
-  local line = CreateSolidTexture(parent, "ARTWORK", BORDER_COLOR.r, BORDER_COLOR.g, BORDER_COLOR.b, 0.5)
-  line:SetHeight(1)
-  line:SetPoint("TOPLEFT", header, "BOTTOMLEFT", 0, -4)
-  line:SetPoint("RIGHT", parent, "RIGHT", -10, 0)
+  -- Gradient divider line (accent to transparent)
+  local lineFrame = CreateFrame("Frame", nil, parent)
+  lineFrame:SetHeight(1)
+  lineFrame:SetPoint("TOPLEFT", header, "BOTTOMLEFT", 0, -4)
+  lineFrame:SetPoint("RIGHT", parent, "RIGHT", -10, 0)
+
+  local line = lineFrame:CreateTexture(nil, "ARTWORK")
+  line:SetAllPoints()
+  line:SetGradient("HORIZONTAL",
+    CreateColor(ACCENT_COLOR.r, ACCENT_COLOR.g, ACCENT_COLOR.b, 0.6),
+    CreateColor(ACCENT_COLOR.r, ACCENT_COLOR.g, ACCENT_COLOR.b, 0))
 
   return header, 24  -- Return header and height consumed
 end
@@ -269,17 +291,17 @@ function Widgets:CreateButton(parent, yOffset, text, width, onClick, tooltipText
   btn:SetSize(width or 150, 30)
   btn:SetPoint("TOPLEFT", parent, "TOPLEFT", 10, yOffset)
 
-  -- Background
-  local bg = CreateSolidTexture(btn, "BACKGROUND", 0.2, 0.2, 0.25, 0.9)
+  -- Background (dark)
+  local bg = CreateSolidTexture(btn, "BACKGROUND", 0.06, 0.08, 0.10, 0.8)
   bg:SetAllPoints()
 
-  -- Border
-  local border = CreateSolidTexture(btn, "ARTWORK", ACCENT_COLOR.r, ACCENT_COLOR.g, ACCENT_COLOR.b, 0.5)
+  -- Border (subtle white)
+  local border = CreateSolidTexture(btn, "ARTWORK", 1, 1, 1, 0.08)
   border:SetPoint("TOPLEFT", 0, 0)
   border:SetPoint("TOPRIGHT", 0, 0)
   border:SetHeight(1)
 
-  local border2 = CreateSolidTexture(btn, "ARTWORK", ACCENT_COLOR.r, ACCENT_COLOR.g, ACCENT_COLOR.b, 0.5)
+  local border2 = CreateSolidTexture(btn, "ARTWORK", 1, 1, 1, 0.08)
   border2:SetPoint("BOTTOMLEFT", 0, 0)
   border2:SetPoint("BOTTOMRIGHT", 0, 0)
   border2:SetHeight(1)
@@ -287,13 +309,13 @@ function Widgets:CreateButton(parent, yOffset, text, width, onClick, tooltipText
   -- Text
   local label = btn:CreateFontString(nil, "OVERLAY")
   label:SetFont(FONT, 12, "OUTLINE")
-  label:SetTextColor(TEXT_WHITE.r, TEXT_WHITE.g, TEXT_WHITE.b)
+  label:SetTextColor(TEXT_NORMAL.r, TEXT_NORMAL.g, TEXT_NORMAL.b, TEXT_NORMAL.a)
   label:SetPoint("CENTER")
   label:SetText(text)
 
   -- Hover effect
   btn:SetScript("OnEnter", function()
-    bg:SetColorTexture(0.25, 0.25, 0.3, 0.9)
+    bg:SetColorTexture(0.08, 0.10, 0.12, 0.9)
     if tooltipText then
       GameTooltip:SetOwner(btn, "ANCHOR_RIGHT")
       GameTooltip:SetText(tooltipText, 1, 1, 1)
@@ -301,7 +323,7 @@ function Widgets:CreateButton(parent, yOffset, text, width, onClick, tooltipText
     end
   end)
   btn:SetScript("OnLeave", function()
-    bg:SetColorTexture(0.2, 0.2, 0.25, 0.9)
+    bg:SetColorTexture(0.06, 0.08, 0.10, 0.8)
     GameTooltip:Hide()
   end)
 
@@ -465,19 +487,19 @@ function Widgets:CreateSlider(parent, yOffset, labelText, min, max, step, getVal
   editBox:SetTextColor(TEXT_WHITE.r, TEXT_WHITE.g, TEXT_WHITE.b)
   editBox:SetJustifyH("CENTER")
 
-  -- EditBox background
-  local editBg = CreateSolidTexture(editBox, "BACKGROUND", 0.15, 0.15, 0.18, 0.9)
+  -- EditBox background (ultra-dark)
+  local editBg = CreateSolidTexture(editBox, "BACKGROUND", BG_DARKEST.r, BG_DARKEST.g, BG_DARKEST.b, BG_DARKEST.a)
   editBg:SetAllPoints()
 
-  -- EditBox border
+  -- EditBox border (subtle white)
   local editBorder = CreateFrame("Frame", nil, editBox)
   editBorder:SetAllPoints()
-  local borderTex = CreateSolidTexture(editBorder, "ARTWORK", BORDER_COLOR.r, BORDER_COLOR.g, BORDER_COLOR.b, 0.6)
+  local borderTex = CreateSolidTexture(editBorder, "ARTWORK", 1, 1, 1, 0.08)
   borderTex:SetPoint("TOPLEFT", 0, 0)
   borderTex:SetPoint("TOPRIGHT", 0, 0)
   borderTex:SetHeight(1)
 
-  local borderTex2 = CreateSolidTexture(editBorder, "ARTWORK", BORDER_COLOR.r, BORDER_COLOR.g, BORDER_COLOR.b, 0.6)
+  local borderTex2 = CreateSolidTexture(editBorder, "ARTWORK", 1, 1, 1, 0.08)
   borderTex2:SetPoint("BOTTOMLEFT", 0, 0)
   borderTex2:SetPoint("BOTTOMRIGHT", 0, 0)
   borderTex2:SetHeight(1)
@@ -572,17 +594,17 @@ function Widgets:CreateDropdown(parent, yOffset, labelText, values, order, getVa
   dropdown:SetSize(BUTTON_W, BUTTON_H)
   dropdown:SetPoint("RIGHT", row, "RIGHT", 0, 0)
 
-  -- Background
-  local bg = CreateSolidTexture(dropdown, "BACKGROUND", 0.15, 0.15, 0.18, 0.9)
+  -- Background (dark)
+  local bg = CreateSolidTexture(dropdown, "BACKGROUND", BG_DARK.r, BG_DARK.g, BG_DARK.b, BG_DARK.a)
   bg:SetAllPoints()
 
-  -- Border
-  local border = CreateSolidTexture(dropdown, "ARTWORK", BORDER_COLOR.r, BORDER_COLOR.g, BORDER_COLOR.b, 0.6)
+  -- Border (subtle white)
+  local border = CreateSolidTexture(dropdown, "ARTWORK", 1, 1, 1, 0.08)
   border:SetPoint("TOPLEFT", 0, 0)
   border:SetPoint("TOPRIGHT", 0, 0)
   border:SetHeight(1)
 
-  local border2 = CreateSolidTexture(dropdown, "ARTWORK", BORDER_COLOR.r, BORDER_COLOR.g, BORDER_COLOR.b, 0.6)
+  local border2 = CreateSolidTexture(dropdown, "ARTWORK", 1, 1, 1, 0.08)
   border2:SetPoint("BOTTOMLEFT", 0, 0)
   border2:SetPoint("BOTTOMRIGHT", 0, 0)
   border2:SetHeight(1)
@@ -746,7 +768,7 @@ function Widgets:CreateDropdown(parent, yOffset, labelText, values, order, getVa
 
   -- Hover effect on button
   dropdown:SetScript("OnEnter", function()
-    bg:SetColorTexture(0.18, 0.18, 0.21, 0.9)
+    bg:SetColorTexture(0.085, 0.105, 0.125, 0.95)
     if tooltipText then
       GameTooltip:SetOwner(dropdown, "ANCHOR_RIGHT")
       GameTooltip:SetText(tooltipText, 1, 1, 1)
@@ -754,7 +776,7 @@ function Widgets:CreateDropdown(parent, yOffset, labelText, values, order, getVa
     end
   end)
   dropdown:SetScript("OnLeave", function()
-    bg:SetColorTexture(0.15, 0.15, 0.18, 0.9)
+    bg:SetColorTexture(BG_DARK.r, BG_DARK.g, BG_DARK.b, BG_DARK.a)
     GameTooltip:Hide()
   end)
 

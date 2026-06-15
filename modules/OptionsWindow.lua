@@ -93,10 +93,10 @@ local function CreateStandardTab(contentArea, tabContent, tabIndex, tileKey, til
   local W = SkyInfoTiles.StyledWidgets
   if not W then return tab end
 
-  -- Background
+  -- Background (transparent - let main frame background show through)
   local bg = tab:CreateTexture(nil, "BACKGROUND")
   bg:SetAllPoints()
-  bg:SetColorTexture(0.1, 0.1, 0.12, 0.95)
+  bg:SetColorTexture(0, 0, 0, 0)
 
   -- Enable toggle
   local enableRow, height = W:CreateToggle(tab, -10, "Enable " .. tileName,
@@ -142,10 +142,10 @@ local function CreateInfoBarTab(contentArea, tabContent)
 
   print("Using StyledWidgets!")
 
-  -- Background
+  -- Background (transparent - let main frame background show through)
   local bg = infobarTab:CreateTexture(nil, "BACKGROUND")
   bg:SetAllPoints()
-  bg:SetColorTexture(0.1, 0.1, 0.12, 0.95)
+  bg:SetColorTexture(0, 0, 0, 0)
 
   -- Enable toggle at the top
   local yOffset = -10
@@ -518,10 +518,32 @@ local function CreateOptionsWindow()
   -- Main frame (fixed size - not resizable to prevent UI elements from going off-screen)
   local f = CreateFrame("Frame", "SkyInfoTilesOptionsFrame", UIParent, "BackdropTemplate")
 
-  -- Fixed size (900x700 to fit all content comfortably)
-  f:SetSize(900, 700)
+  -- Background texture directly on main frame
+  local bgTexture = f:CreateTexture(nil, "BACKGROUND", nil, -8)
+  bgTexture:SetTexture("Interface\\AddOns\\SkyInfoTiles\\media\\bg2.png")
+  bgTexture:SetAllPoints(f)
+  bgTexture:SetTexCoord(0.05, 0.95, 0.05, 0.92)  -- Crop more from bottom to remove black edge
+  bgTexture:SetVertexColor(0.6, 0.85, 1.0)  -- Sky blue tint
+  bgTexture:SetAlpha(1.0)
+
+  -- Gradient overlay
+  local bgGradient = f:CreateTexture(nil, "BACKGROUND", nil, -7)
+  bgGradient:SetAllPoints(f)
+  bgGradient:SetGradient("VERTICAL",
+    CreateColor(0.4, 0.8, 1.0, 0.08),
+    CreateColor(0, 0, 0, 0))
+  bgGradient:SetBlendMode("ADD")
+
+  -- Larger to better fit blue content area
+  f:SetSize(1100, 850)
   f:SetPoint("CENTER")
   f:SetFrameStrata("DIALOG")
+
+  -- Add pixel-perfect scaling (Ellesmere approach)
+  local physW = GetPhysicalScreenSize()
+  local baseScale = GetScreenWidth() / physW
+  f:SetScale(baseScale)  -- Make 1 WoW unit = 1 screen pixel
+
   f:SetToplevel(true)
   f:EnableMouse(true)
   f:SetMovable(true)
@@ -560,16 +582,19 @@ local function CreateOptionsWindow()
     end
   end)
 
-  -- Modern dark backdrop
+  -- No backdrop at all - let bgFrame textures show
   f:SetBackdrop({
-    bgFile = "Interface\\Buttons\\WHITE8X8",
+    bgFile = nil,
     edgeFile = "Interface\\Buttons\\WHITE8X8",
     tile = false,
-    edgeSize = 2,
-    insets = { left = 2, right = 2, top = 2, bottom = 2 }
+    edgeSize = 1,
+    insets = { left = 1, right = 1, top = 1, bottom = 1 }
   })
-  f:SetBackdropColor(0.15, 0.15, 0.15, 0.95)  -- Lighter background
-  f:SetBackdropBorderColor(0.3, 0.3, 0.3, 1)
+  f:SetBackdropBorderColor(1, 1, 1, 0.08)
+
+  -- Background textures already created above with bgFrame
+
+  print("SkyInfoTiles: Background texture loaded on bgFrame (theme with sky blue tint)")
 
   -- Title bar with gradient background
   local titleBar = CreateFrame("Frame", nil, f, "BackdropTemplate")
@@ -580,20 +605,27 @@ local function CreateOptionsWindow()
     bgFile = "Interface\\Buttons\\WHITE8X8",
     edgeFile = nil,
   })
-  titleBar:SetBackdropColor(0.2, 0.2, 0.2, 0.8)  -- Lighter title bar
+  titleBar:SetBackdropColor(0.075, 0.095, 0.115, 0.95)  -- Slightly lighter than main
   titleBar:EnableMouse(true)
   titleBar:RegisterForDrag("LeftButton")
   titleBar:SetScript("OnDragStart", function() f:StartMoving() end)
   titleBar:SetScript("OnDragStop", function() f:StopMovingOrSizing() end)
   titleBar:SetFrameLevel(f:GetFrameLevel() + 1)
 
-  -- Title text (maximum brightness and contrast) - child of titleBar so it's always on top
+  -- Add subtle gradient overlay (sky blue accent)
+  local gradient = titleBar:CreateTexture(nil, "BACKGROUND")
+  gradient:SetAllPoints()
+  gradient:SetGradient("HORIZONTAL",
+    CreateColor(0.4, 0.8, 1.0, 0.08),  -- Sky blue accent
+    CreateColor(0, 0, 0, 0))
+
+  -- Title text (pure white, bigger font) - child of titleBar so it's always on top
   local title = titleBar:CreateFontString(nil, "OVERLAY", "SystemFont_Huge1")
   title:SetPoint("LEFT", titleBar, "LEFT", 15, 0)
   title:SetText("SkyInfoTiles")
-  title:SetFont(title:GetFont(), 24, "THICKOUTLINE")
-  title:SetTextColor(1, 1, 0, 1) -- Pure yellow (maximum brightness)
-  title:SetShadowColor(0, 0, 0, 1)
+  title:SetFont(title:GetFont(), 28, "THICKOUTLINE")  -- Bigger from 24
+  title:SetTextColor(1, 1, 1, 1)  -- Pure white instead of yellow
+  title:SetShadowColor(0, 0, 0, 0.8)
   title:SetShadowOffset(2, -2)
 
   -- Close button
@@ -645,7 +677,7 @@ local function CreateOptionsWindow()
     tab:SetSize(110, 32)
     tab:SetPoint("TOPLEFT", 10, -50) -- Initial position, will be repositioned
 
-    -- Background with border
+    -- Modern tab styling
     tab:SetBackdrop({
       bgFile = "Interface\\Buttons\\WHITE8X8",
       edgeFile = "Interface\\Buttons\\WHITE8X8",
@@ -653,8 +685,8 @@ local function CreateOptionsWindow()
       edgeSize = 1,
       insets = { left = 1, right = 1, top = 1, bottom = 1 }
     })
-    tab:SetBackdropColor(0.25, 0.25, 0.25, 0.9)  -- Lighter tabs
-    tab:SetBackdropBorderColor(0.4, 0.4, 0.4, 1)
+    tab:SetBackdropColor(0.06, 0.08, 0.10, 0.8)  -- Deselected
+    tab:SetBackdropBorderColor(1, 1, 1, 0.05)
 
     -- Text
     local text = tab:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
@@ -663,36 +695,50 @@ local function CreateOptionsWindow()
     text:SetTextColor(0.7, 0.7, 0.7, 1)
     tab.text = text
 
-    -- Highlight
+    -- Add accent underline (created but hidden initially)
+    local underline = tab:CreateTexture(nil, "OVERLAY")
+    underline:SetColorTexture(0.4, 0.8, 1.0, 0.9)  -- Sky blue
+    underline:SetHeight(2)
+    underline:SetPoint("BOTTOMLEFT", tab, "BOTTOMLEFT", 4, 0)
+    underline:SetPoint("BOTTOMRIGHT", tab, "BOTTOMRIGHT", -4, 0)
+    underline:Hide()
+    tab.underline = underline
+
+    -- Hover effect
     tab:SetScript("OnEnter", function(self)
       if not self.selected then
-        self:SetBackdropColor(0.3, 0.3, 0.3, 1)  -- Lighter hover
-        self:SetBackdropBorderColor(0.5, 0.5, 0.5, 1)
-        self.text:SetTextColor(0.9, 0.9, 0.9, 1)
+        self:SetBackdropColor(0.08, 0.10, 0.12, 0.9)
+        self:SetBackdropBorderColor(1, 1, 1, 0.12)
+        self.text:SetTextColor(1, 1, 1, 0.85)
       end
     end)
+
+    -- Unhover
     tab:SetScript("OnLeave", function(self)
       if not self.selected then
-        self:SetBackdropColor(0.25, 0.25, 0.25, 0.9)  -- Lighter normal
-        self:SetBackdropBorderColor(0.4, 0.4, 0.4, 1)
+        self:SetBackdropColor(0.06, 0.08, 0.10, 0.8)
+        self:SetBackdropBorderColor(1, 1, 1, 0.05)
         self.text:SetTextColor(0.7, 0.7, 0.7, 1)
       end
     end)
 
-    -- Click handler
+    -- Click handler (update to show/hide underline)
     tab:SetScript("OnClick", function(self)
       -- Deselect all tabs
       for _, t in ipairs(tabs) do
         t.selected = false
-        t:SetBackdropColor(0.25, 0.25, 0.25, 0.9)  -- Lighter deselected
-        t:SetBackdropBorderColor(0.4, 0.4, 0.4, 1)
+        t:SetBackdropColor(0.06, 0.08, 0.10, 0.8)
+        t:SetBackdropBorderColor(1, 1, 1, 0.05)
         t.text:SetTextColor(0.7, 0.7, 0.7, 1)
+        if t.underline then t.underline:Hide() end
       end
+
       -- Select this tab
       self.selected = true
-      self:SetBackdropColor(0.15, 0.15, 0.15, 1)  -- Lighter selected (darker than normal for contrast)
-      self:SetBackdropBorderColor(1, 0.82, 0, 1) -- Gold border
-      self.text:SetTextColor(1, 0.82, 0, 1) -- Gold text
+      self:SetBackdropColor(0.02, 0.03, 0.04, 1.0)  -- Darkest
+      self:SetBackdropBorderColor(0.4, 0.8, 1.0, 0.6)  -- Sky blue border
+      self.text:SetTextColor(1, 1, 1, 1)  -- Bright white
+      if self.underline then self.underline:Show() end
 
       -- Show corresponding content
       for i, content in ipairs(tabContent) do
@@ -716,15 +762,10 @@ local function CreateOptionsWindow()
   CreateTab("InfoBar", 9)
   CreateTab("Profiles", 10)
 
-  -- Content area with subtle background (adjusted for 2 rows of tabs)
-  local contentArea = CreateFrame("Frame", nil, f, "BackdropTemplate")
-  contentArea:SetPoint("TOPLEFT", 10, -130) -- More space for 2 rows of tabs
+  -- Content area (no backdrop template - fully transparent)
+  local contentArea = CreateFrame("Frame", nil, f)
+  contentArea:SetPoint("TOPLEFT", 10, -130)
   contentArea:SetPoint("BOTTOMRIGHT", -10, 10)
-  contentArea:SetBackdrop({
-    bgFile = "Interface\\Buttons\\WHITE8X8",
-    edgeFile = nil,
-  })
-  contentArea:SetBackdropColor(0.18, 0.18, 0.18, 0.5)  -- Lighter content area
 
   -- === TAB 1: GENERAL ===
   local generalTab = CreateFrame("Frame", nil, contentArea)
@@ -734,10 +775,10 @@ local function CreateOptionsWindow()
 
   local W = SkyInfoTiles.StyledWidgets
 
-  -- Background
+  -- Background (transparent - let main frame background show through)
   local bg = generalTab:CreateTexture(nil, "BACKGROUND")
   bg:SetAllPoints()
-  bg:SetColorTexture(0.1, 0.1, 0.12, 0.95)
+  bg:SetColorTexture(0, 0, 0, 0)
 
   local yOffset = -10
 
@@ -787,10 +828,10 @@ local function CreateOptionsWindow()
   currencyTab:Hide()
   tabContent[2] = currencyTab
 
-  -- Background
+  -- Background (transparent - let main frame background show through)
   local currencyBg = currencyTab:CreateTexture(nil, "BACKGROUND")
   currencyBg:SetAllPoints()
-  currencyBg:SetColorTexture(0.1, 0.1, 0.12, 0.95)
+  currencyBg:SetColorTexture(0, 0, 0, 0)
 
   -- Enable Currency Tile toggle
   local enableCurrencyRow, currencyH1 = W:CreateToggle(currencyTab, -10, "Enable Currency Tile",
@@ -3174,6 +3215,11 @@ CreateOptionsWindow_Part2 = function(contentArea, tabContent, f, tabs)
   profilesTab:SetAllPoints()
   profilesTab:Hide()
   tabContent[10] = profilesTab
+
+  -- Background (transparent - let main frame background show through)
+  local profilesBg = profilesTab:CreateTexture(nil, "BACKGROUND")
+  profilesBg:SetAllPoints()
+  profilesBg:SetColorTexture(0, 0, 0, 0)
 
   -- Add scrollFrame for consistent width
   local scrollFrame = CreateFrame("ScrollFrame", nil, profilesTab, "UIPanelScrollFrameTemplate")
