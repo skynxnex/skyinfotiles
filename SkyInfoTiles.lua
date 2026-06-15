@@ -15,6 +15,8 @@ local CATALOG = {
   { key = "crosshair",  type = "crosshair",  label = "Crosshair",           defaultEnabled = false },
   { key = "clock",      type = "clock",      label = "24h Clock",           defaultEnabled = false },
   { key = "dungeonports", type = "dungeonports", label = "Dungeon Teleports", defaultEnabled = false },
+  { key = "bufftracker", type = "bufftracker", label = "Buff Tracker",      defaultEnabled = false, x = 800, y = -400 },
+  { key = "infobar",    type = "infobar",    label = "Info Bar",            defaultEnabled = false },
 }
 SkyInfoTiles.CATALOG = CATALOG -- used by Options.lua
 
@@ -99,6 +101,81 @@ function SkyInfoTiles.Utils.TokensFromName(s)
     if not STOP_WORDS[tk] then tokens[#tokens + 1] = tk end
   end
   return tokens, SkyInfoTiles.Utils.NormKey(s)
+end
+
+-- === Font Discovery (shared utility for all tiles) ===
+local DISCOVERED_FONTS = nil
+local fontsDiscovered = false
+
+function SkyInfoTiles.Utils.DiscoverFonts()
+  if fontsDiscovered then return DISCOVERED_FONTS end
+  fontsDiscovered = true
+
+  local fonts = {}
+  local seen = {}
+
+  -- Test if a font actually loads
+  local testFrame = CreateFrame("Frame")
+  local testFont = testFrame:CreateFontString()
+  local function TestFont(path)
+    local success = pcall(testFont.SetFont, testFont, path, 12, "")
+    return success
+  end
+
+  -- Helper to add font
+  local function AddFont(path, name)
+    local key = name:lower()
+    if not seen[key] then
+      if TestFont(path) then
+        seen[key] = true
+        table.insert(fonts, { path = path, name = name })
+      end
+    end
+  end
+
+  -- 1. WoW built-in fonts (always available)
+  AddFont("Fonts\\FRIZQT__.ttf", "Friz Quadrata (Default)")
+  AddFont("Fonts\\ARIALN.ttf", "Arial Narrow")
+  AddFont("Fonts\\MORPHEUS.ttf", "Morpheus (Decorative)")
+  AddFont("Fonts\\skurri.ttf", "Skurri (Runic)")
+  AddFont("Fonts\\theboldfont.ttf", "Bold Font")
+
+  -- 2. Try LibSharedMedia-3.0 if available
+  local LSM = LibStub and LibStub("LibSharedMedia-3.0", true)
+  if LSM then
+    local lsmFonts = LSM:HashTable("font")
+    if lsmFonts then
+      for name, path in pairs(lsmFonts) do
+        AddFont(path, name)
+      end
+    end
+  end
+
+  -- 3. Known addon fonts (fallback/additional fonts not in LSM)
+  local knownFonts = {
+    -- SharedMedia
+    { path = "Interface\\AddOns\\SharedMedia\\fonts\\Adventure.ttf", name = "Adventure" },
+    { path = "Interface\\AddOns\\SharedMedia\\fonts\\ARIAL.TTF", name = "Arial" },
+    { path = "Interface\\AddOns\\SharedMedia\\fonts\\DejaVuSansMono.ttf", name = "DejaVu Sans Mono" },
+    { path = "Interface\\AddOns\\SharedMedia\\fonts\\Expressway.ttf", name = "Expressway" },
+    { path = "Interface\\AddOns\\SharedMedia\\fonts\\Roadway.ttf", name = "Roadway" },
+    -- SharedMedia_ClassicalFonts
+    { path = "Interface\\AddOns\\SharedMedia_ClassicalFonts\\fonts\\King Arthur Legend.ttf", name = "King Arthur" },
+    { path = "Interface\\AddOns\\SharedMedia_ClassicalFonts\\fonts\\OldeEnglish.ttf", name = "Olde English" },
+    -- Cell
+    { path = "Interface\\AddOns\\Cell\\Media\\Fonts\\Accidental Presidency.ttf", name = "Accidental Presidency" },
+    -- ElvUI
+    { path = "Interface\\AddOns\\ElvUI\\Core\\Media\\Fonts\\PT_Sans_Narrow.ttf", name = "PT Sans Narrow" },
+    -- WarpDeplete
+    { path = "Interface\\AddOns\\WarpDeplete\\Fonts\\BigNoodleTitling.ttf", name = "Big Noodle Titling" },
+  }
+
+  for _, font in ipairs(knownFonts) do
+    AddFont(font.path, font.name)
+  end
+
+  DISCOVERED_FONTS = fonts
+  return fonts
 end
 
 -- === Shared Theme Constants ===
@@ -589,7 +666,8 @@ local function SetMovable(f)
   end
 
   if not (InCombatLockdown and InCombatLockdown()) then
-    if f.EnableMouse then pcall(f.EnableMouse, f, unlocked) end
+    -- Always enable mouse for tiles with _alwaysMouse flag (e.g., InfoBar needs hover for tooltip)
+    if f.EnableMouse then pcall(f.EnableMouse, f, unlocked or f._alwaysMouse) end
     if f.SetMovable then pcall(f.SetMovable, f, unlocked) end
     if unlocked and f.RegisterForDrag then
       pcall(f.RegisterForDrag, f, "LeftButton")
@@ -786,7 +864,7 @@ SlashCmdList["SKYINFOTILES"] = function(msg)
   local cmd, rest = msg:match("^(%S+)%s*(.*)$")
   if not cmd or cmd == "" then
     Print("Commands: lock, unlock, enable <key>, disable <key>, list, reset, clean, options, scope <char|warband>, outline <none|outline|thick>, layout <key> <horizontal|vertical>, preview <key> <on|off>, scale <key> <0.5-2.0>")
-    Print("Keys: currencies, keystone, charstats, crosshair, clock, dungeonports")
+    Print("Keys: currencies, keystone, charstats, crosshair, clock, dungeonports, bufftracker, infobar")
     return
   end
   cmd = cmd:lower()

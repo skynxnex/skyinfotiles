@@ -7,6 +7,7 @@
 ## OptionalDeps: LibSharedMedia-3.0
 
 SkyInfoTiles.lua
+modules\StyledWidgets.lua
 modules\Options.lua
 modules\MinimapButton.lua
 modules\OptionsWindow.lua
@@ -16,3 +17,5 @@ modules\CharStatsTile.lua
 modules\DungeonPortsTile.lua
 modules\CrosshairTile.lua
 modules\ClockTile.lua
+modules\BuffTrackerTile.lua
+modules\InfoBarTile.lua
