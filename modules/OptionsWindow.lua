@@ -131,16 +131,11 @@ local function CreateInfoBarTab(contentArea, tabContent)
   infobarTab:Hide()
   tabContent[9] = infobarTab
 
-  print("CreateInfoBarTab called!")
-  print("SkyInfoTiles.StyledWidgets = ", SkyInfoTiles.StyledWidgets)
-
   local W = SkyInfoTiles.StyledWidgets
   if not W then
     print("SkyInfoTiles: StyledWidgets not loaded!")
     return
   end
-
-  print("Using StyledWidgets!")
 
   -- Background (transparent - let main frame background show through)
   local bg = infobarTab:CreateTexture(nil, "BACKGROUND")
@@ -593,8 +588,6 @@ local function CreateOptionsWindow()
   f:SetBackdropBorderColor(1, 1, 1, 0.08)
 
   -- Background textures already created above with bgFrame
-
-  print("SkyInfoTiles: Background texture loaded on bgFrame (theme with sky blue tint)")
 
   -- Enable dragging directly on main frame
   f:EnableMouse(true)
@@ -3381,7 +3374,6 @@ CreateOptionsWindow_Part2 = function(contentArea, tabContent, f, tabs)
   if SelectSidebarButton then
     SelectSidebarButton(1)
   else
-    print("ERROR: SelectSidebarButton is nil!")
     -- Fallback: show first tab content manually
     if tabContent[1] then
       for i, content in ipairs(tabContent) do

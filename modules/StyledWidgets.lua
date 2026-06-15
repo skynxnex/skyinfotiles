@@ -12,7 +12,7 @@ end
 local Widgets = {}
 SkyInfoTiles.StyledWidgets = Widgets
 
-print("SkyInfoTiles: StyledWidgets loaded successfully!")
+-- StyledWidgets loaded
 
 -------------------------------------------------------------------------------
 -- Visual Constants - Sci-Fi Modern Theme

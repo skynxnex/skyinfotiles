@@ -1205,6 +1205,9 @@ ev:SetScript("OnEvent", function(self, event, ...)
     SkyInfoTiles.UpdateAll()
     if SkyInfoTiles._OptionsRefresh then SkyInfoTiles._OptionsRefresh() end
 
+    -- Welcome message
+    print("|cff66ccffSkyInfoTiles|r loaded! Use |cff66ccff/skytiles|r to open options.")
+
     -- Start background font discovery (prevents UI freeze on first dropdown open)
     if SkyInfoTiles.StartFontDiscovery then
       SkyInfoTiles.StartFontDiscovery()
