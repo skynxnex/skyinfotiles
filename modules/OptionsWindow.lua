@@ -520,7 +520,7 @@ local function CreateOptionsWindow()
 
   -- Background texture directly on main frame
   local bgTexture = f:CreateTexture(nil, "BACKGROUND", nil, -8)
-  bgTexture:SetTexture("Interface\\AddOns\\SkyInfoTiles\\media\\bg3.png")
+  bgTexture:SetTexture("Interface\\AddOns\\SkyInfoTiles\\media\\bg-sky.png")
   bgTexture:SetAllPoints(f)
   bgTexture:SetTexCoord(0.05, 0.955, 0.055, 0.92)  -- Right edge: 0.5% less crop, 5.5% top crop
   bgTexture:SetVertexColor(0.6, 0.85, 1.0)  -- Sky blue tint
