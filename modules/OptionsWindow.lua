@@ -520,9 +520,9 @@ local function CreateOptionsWindow()
 
   -- Background texture directly on main frame
   local bgTexture = f:CreateTexture(nil, "BACKGROUND", nil, -8)
-  bgTexture:SetTexture("Interface\\AddOns\\SkyInfoTiles\\media\\bg2.png")
+  bgTexture:SetTexture("Interface\\AddOns\\SkyInfoTiles\\media\\bg3.png")
   bgTexture:SetAllPoints(f)
-  bgTexture:SetTexCoord(0.05, 0.95, 0.08, 0.92)  -- Restore original crop
+  bgTexture:SetTexCoord(0.05, 0.955, 0.055, 0.92)  -- Right edge: 0.5% less crop, 5.5% top crop
   bgTexture:SetVertexColor(0.6, 0.85, 1.0)  -- Sky blue tint
   bgTexture:SetAlpha(1.0)
 
@@ -2081,7 +2081,21 @@ local function CreateOptionsWindow()
   local colorSwatch = colorButton:CreateTexture(nil, "OVERLAY")
   colorSwatch:SetSize(16, 16)
   colorSwatch:SetPoint("LEFT", colorButton, "RIGHT", 5, 0)
-  colorSwatch:SetColorTexture(1, 0, 0, 1) -- Default red
+
+  -- Initialize with saved color
+  local initColor = { r = 1, g = 0, b = 0, a = 1 }  -- Default red
+  if SkyInfoTiles.GetActiveTiles then
+    local tiles = SkyInfoTiles.GetActiveTiles()
+    for _, tile in ipairs(tiles) do
+      if tile.key == "crosshair" or tile.type == "crosshair" then
+        if tile.color then
+          initColor = tile.color
+        end
+        break
+      end
+    end
+  end
+  colorSwatch:SetColorTexture(initColor.r, initColor.g, initColor.b, initColor.a or 1)
   crosshairTab.colorSwatch = colorSwatch
 
   colorButton:SetScript("OnClick", function(self)
@@ -2977,12 +2991,40 @@ CreateOptionsWindow_Part2 = function(contentArea, tabContent, f, tabs)
   local addBuffLabel = scrollChild:CreateFontString(nil, "OVERLAY", "GameFontNormal")
   addBuffLabel:SetPoint("TOPLEFT", 10, yOffsetBuff)
   addBuffLabel:SetText("Add Buff ID:")
+  addBuffLabel:SetTextColor(1, 1, 1, 1)
 
-  local addBuffEditBox = CreateFrame("EditBox", nil, scrollChild, "InputBoxTemplate")
-  addBuffEditBox:SetSize(100, 20)
+  local addBuffEditBox = CreateFrame("EditBox", nil, scrollChild)
+  addBuffEditBox:SetSize(100, 24)
   addBuffEditBox:SetPoint("LEFT", addBuffLabel, "RIGHT", 10, 0)
   addBuffEditBox:SetAutoFocus(false)
   addBuffEditBox:SetNumeric(true)
+  addBuffEditBox:SetFont("Fonts\\FRIZQT__.ttf", 11, "OUTLINE")
+  addBuffEditBox:SetTextColor(1, 1, 1)
+  addBuffEditBox:SetJustifyH("CENTER")
+
+  -- EditBox background (ultra-dark, matching StyledWidgets)
+  local editBg = addBuffEditBox:CreateTexture(nil, "BACKGROUND")
+  editBg:SetColorTexture(0.02, 0.03, 0.04, 0.95)
+  editBg:SetAllPoints()
+
+  -- EditBox border (subtle white, matching StyledWidgets)
+  local editBorder = CreateFrame("Frame", nil, addBuffEditBox)
+  editBorder:SetAllPoints()
+  local borderTop = editBorder:CreateTexture(nil, "ARTWORK")
+  borderTop:SetColorTexture(1, 1, 1, 0.08)
+  borderTop:SetPoint("TOPLEFT", 0, 0)
+  borderTop:SetPoint("TOPRIGHT", 0, 0)
+  borderTop:SetHeight(1)
+
+  local borderBottom = editBorder:CreateTexture(nil, "ARTWORK")
+  borderBottom:SetColorTexture(1, 1, 1, 0.08)
+  borderBottom:SetPoint("BOTTOMLEFT", 0, 0)
+  borderBottom:SetPoint("BOTTOMRIGHT", 0, 0)
+  borderBottom:SetHeight(1)
+
+  -- Handle text input
+  addBuffEditBox:SetScript("OnEscapePressed", function(self) self:ClearFocus() end)
+  addBuffEditBox:SetScript("OnEnterPressed", function(self) self:ClearFocus() end)
 
   local addBuffButton = CreateFrame("Button", nil, scrollChild, "UIPanelButtonTemplate")
   addBuffButton:SetSize(60, 22)
