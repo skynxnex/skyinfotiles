@@ -1,16 +1,15 @@
 local ADDON_NAME = ...
 local SkyInfoTiles = _G[ADDON_NAME]
-local UI = SkyInfoTiles and SkyInfoTiles.UI
 
 local API = {}
 
 -- Tracker type defaults (all sizes are fixed)
 local TRACKER_DEFAULTS = {
   buffs = {
-    iconSize = 32,
+    iconSize = 40,
   },
   trinkets = {
-    iconSize = 30,
+    iconSize = 40,
   },
   potions = {
     iconSize = 40,
@@ -431,7 +430,7 @@ local function RebuildBuffs(f, cfg)
   cfg = cfg or {}
 
   -- Clear old
-  for i, frame in ipairs(f._buffFrames or {}) do
+  for _, frame in ipairs(f._buffFrames or {}) do
     SafeReleaseRegion(frame.icon)
     SafeReleaseRegion(frame.time)
     SafeReleaseRegion(frame.count)
@@ -439,7 +438,8 @@ local function RebuildBuffs(f, cfg)
   end
   f._buffFrames = {}
 
-  local iconSize, spacing, fontSize, fontFile, outline, anchorPoint, countFontSize, timerOffsetX, timerOffsetY, countOffsetX, countOffsetY = ReadCfg(cfg)
+  local iconSize, spacing, fontSize, fontFile, outline, anchorPoint, countFontSize,
+        timerOffsetX, timerOffsetY, countOffsetX, countOffsetY = ReadCfg(cfg)
 
   -- Get tracker type and registry
   local trackerType = cfg.trackerType or "buffs"
@@ -506,7 +506,7 @@ local function RebuildBuffs(f, cfg)
   end
 
   -- Create item frames
-  for i, itemID in ipairs(itemList) do
+  for _, itemID in ipairs(itemList) do
     local bf = CreateFrame("Frame", nil, f)
     bf:SetSize(iconSize, iconSize)
 
@@ -561,39 +561,46 @@ local function RebuildBuffs(f, cfg)
     table.insert(f._buffFrames, bf)
   end
 
-  -- Position items based on anchor point growth direction
+  -- Position icons within container
   for i, bf in ipairs(f._buffFrames) do
     bf:ClearAllPoints()
 
     if i == 1 then
-      -- First icon anchors to parent frame center
-      bf:SetPoint("CENTER", f, "CENTER", 0, 0)
+      -- First icon anchors to container edge based on anchor point
+      if anchorPoint == "TOPRIGHT" or anchorPoint == "BOTTOMRIGHT" then
+        -- Right-aligned: anchor to container's TOPRIGHT
+        bf:SetPoint("TOPRIGHT", f, "TOPRIGHT", 0, 0)
+      else
+        -- Left-aligned or centered: anchor to container's TOPLEFT
+        bf:SetPoint("TOPLEFT", f, "TOPLEFT", 0, 0)
+      end
     else
       local prev = f._buffFrames[i-1]
 
       -- Growth direction based on anchor point
-      if anchorPoint == "TOPLEFT" or anchorPoint == "BOTTOMLEFT" or anchorPoint == "TOP" or anchorPoint == "BOTTOM" then
-        -- Grows to the right
-        bf:SetPoint("LEFT", prev, "RIGHT", spacing, 0)
-      elseif anchorPoint == "TOPRIGHT" or anchorPoint == "BOTTOMRIGHT" then
+      if anchorPoint == "TOPRIGHT" or anchorPoint == "BOTTOMRIGHT" then
         -- Grows to the left
         bf:SetPoint("RIGHT", prev, "LEFT", -spacing, 0)
+      else
+        -- Grows to the right
+        bf:SetPoint("LEFT", prev, "RIGHT", spacing, 0)
       end
     end
   end
 
-  -- Calculate frame size (always horizontal layout)
+  -- Calculate and set container size to fit all icons
   local count = #f._buffFrames
-  local width = (iconSize * count) + (spacing * (count - 1))
-  local height = iconSize
-
-  f:SetSize(width, height)
+  if count > 0 then
+    local totalWidth = (iconSize * count) + (spacing * (count - 1))
+    f:SetSize(totalWidth, iconSize)
+  else
+    f:SetSize(1, 1)
+  end
 end
 
 local function UpdateBuffDisplay(f)
   if not f or not f._buffFrames then return end
 
-  local iconSize = f._iconSize or 32
   local spacing = f._spacing or 1
   local anchorPoint = f._anchorPoint or "TOPLEFT"
   local trackerType = f._trackerType or "buffs"
@@ -670,33 +677,31 @@ local function UpdateBuffDisplay(f)
     bf:ClearAllPoints()
 
     if i == 1 then
-      bf:SetPoint("CENTER", f, "CENTER", 0, 0)
+      if anchorPoint == "TOPRIGHT" or anchorPoint == "BOTTOMRIGHT" then
+        bf:SetPoint("TOPRIGHT", f, "TOPRIGHT", 0, 0)
+      else
+        bf:SetPoint("TOPLEFT", f, "TOPLEFT", 0, 0)
+      end
     else
       local prev = visibleFrames[i-1]
-
-      -- Growth direction based on anchor point
-      if anchorPoint == "TOPLEFT" or anchorPoint == "BOTTOMLEFT" or anchorPoint == "TOP" or anchorPoint == "BOTTOM" then
-        -- Grows to the right
-        bf:SetPoint("LEFT", prev, "RIGHT", spacing, 0)
-      elseif anchorPoint == "TOPRIGHT" or anchorPoint == "BOTTOMRIGHT" then
-        -- Grows to the left
+      if anchorPoint == "TOPRIGHT" or anchorPoint == "BOTTOMRIGHT" then
         bf:SetPoint("RIGHT", prev, "LEFT", -spacing, 0)
+      else
+        bf:SetPoint("LEFT", prev, "RIGHT", spacing, 0)
       end
     end
   end
 
-  -- Resize parent frame based on visible items (always horizontal layout)
+  -- Resize container based on visible buffs
   local count = #visibleFrames
-
+  local iconSize = f._iconSize or 32
   if count == 0 then
-    -- No items active, minimal size
     f:Hide()
     f:SetSize(1, 1)
   else
     f:Show()
-    local width = (iconSize * count) + (spacing * (count - 1))
-    local height = iconSize
-    f:SetSize(width, height)
+    local totalWidth = (iconSize * count) + (spacing * (count - 1))
+    f:SetSize(totalWidth, iconSize)
   end
 end
 
