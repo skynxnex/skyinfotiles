@@ -2669,6 +2669,17 @@ end
 
 -- Continuation of CreateOptionsWindow (to avoid 200 local variable limit)
 CreateOptionsWindow_Part2 = function(contentArea, tabContent, f, tabs)
+  -- Helper to get tracker-specific settings
+  local function GetTrackerSettings(tile, trackerType)
+    if not tile then return {} end
+    trackerType = trackerType or tile.trackerType or "buffs"
+    local settingsKey = trackerType .. "Settings"
+    if not tile[settingsKey] then
+      tile[settingsKey] = {}
+    end
+    return tile[settingsKey]
+  end
+
   -- === TAB 8: BUFFTRACKER ===
   local buffTrackerTab, buffTrackerYOffset = CreateStandardTab(contentArea, tabContent, 8, "bufftracker", "Buff Tracker", "Track important buffs and debuffs")
 
@@ -2686,17 +2697,104 @@ CreateOptionsWindow_Part2 = function(contentArea, tabContent, f, tabs)
 
   local yOffsetBuff = -10
 
-  -- Position sliders
-  local buffPosSliders = CreatePositionSliders(scrollChild, "bufftracker", "bufftracker", yOffsetBuff)
-  buffTrackerTab.xPosSlider = buffPosSliders.xPosSlider
-  buffTrackerTab.xPosEditBox = buffPosSliders.xPosEditBox
-  buffTrackerTab.yPosSlider = buffPosSliders.yPosSlider
-  buffTrackerTab.yPosEditBox = buffPosSliders.yPosEditBox
-  yOffsetBuff = buffPosSliders.newYOffset
+  -- Tracker Type dropdown (GLOBAL setting - not tracker-specific)
+  local trackerTypeValues = {
+    buffs = "Buffs (Auras)",
+    trinkets = "Trinkets",
+    potions = "Potions/Healthstones"
+  }
+  local trackerTypeOrder = { "buffs", "trinkets", "potions" }
 
-  yOffsetBuff = yOffsetBuff - 20
+  local trackerTypeRow, trackerTypeHeight, trackerTypeDropdown = W:CreateDropdown(scrollChild, yOffsetBuff, "Tracker Type",
+    trackerTypeValues, trackerTypeOrder,
+    function()
+      if SkyInfoTiles.GetActiveTiles then
+        local tiles = SkyInfoTiles.GetActiveTiles()
+        for _, tile in ipairs(tiles) do
+          if tile.key == "bufftracker" or tile.type == "bufftracker" then
+            return tile.trackerType or "buffs"
+          end
+        end
+      end
+      return "buffs"
+    end,
+    function(value)
+      if SkyInfoTiles.GetActiveTiles then
+        local tiles = SkyInfoTiles.GetActiveTiles()
+        for _, tile in ipairs(tiles) do
+          if tile.key == "bufftracker" or tile.type == "bufftracker" then
+            tile.trackerType = value
+            if SkyInfoTiles.Rebuild and SkyInfoTiles.UpdateAll then
+              SkyInfoTiles.Rebuild()
+              SkyInfoTiles.UpdateAll()
+            end
+            -- Update buff list visibility when tracker type changes
+            if buffTrackerTab.UpdateBuffListVisibility then
+              buffTrackerTab.UpdateBuffListVisibility()
+            end
+            -- Update preview
+            if buffTrackerTab.UpdatePreview then
+              buffTrackerTab.UpdatePreview()
+            end
+            break
+          end
+        end
+      end
+    end,
+    "Choose what to track: buffs, trinkets, or potions"
+  )
+  buffTrackerTab.trackerTypeDropdown = trackerTypeDropdown
+  yOffsetBuff = yOffsetBuff - trackerTypeHeight - 10
 
-  -- Strata dropdown
+  -- Anchor Point dropdown (TRACKER-SPECIFIC - 6 options only)
+  local anchorPointValues = {
+    TOPLEFT = "Top Left",
+    TOPRIGHT = "Top Right",
+    BOTTOMLEFT = "Bottom Left",
+    BOTTOMRIGHT = "Bottom Right",
+    TOP = "Top",
+    BOTTOM = "Bottom"
+  }
+  local anchorPointOrder = { "TOPLEFT", "TOPRIGHT", "BOTTOMLEFT", "BOTTOMRIGHT", "TOP", "BOTTOM" }
+
+  local anchorPointRow, anchorPointHeight, anchorPointDropdown = W:CreateDropdown(scrollChild, yOffsetBuff, "Anchor Point",
+    anchorPointValues, anchorPointOrder,
+    function()
+      if SkyInfoTiles.GetActiveTiles then
+        local tiles = SkyInfoTiles.GetActiveTiles()
+        for _, tile in ipairs(tiles) do
+          if tile.key == "bufftracker" or tile.type == "bufftracker" then
+            local trackerType = tile.trackerType or "buffs"
+            local settings = GetTrackerSettings(tile, trackerType)
+            return settings.anchorPoint or "TOPLEFT"
+          end
+        end
+      end
+      return "TOPLEFT"
+    end,
+    function(value)
+      if SkyInfoTiles.GetActiveTiles then
+        local tiles = SkyInfoTiles.GetActiveTiles()
+        for _, tile in ipairs(tiles) do
+          if tile.key == "bufftracker" or tile.type == "bufftracker" then
+            local trackerType = tile.trackerType or "buffs"
+            local settings = GetTrackerSettings(tile, trackerType)
+            settings.anchorPoint = value
+            if SkyInfoTiles.Rebuild and SkyInfoTiles.UpdateAll then
+              SkyInfoTiles.Rebuild()
+              SkyInfoTiles.UpdateAll()
+            end
+            break
+          end
+        end
+      end
+    end,
+    "Position relative to player frame"
+  )
+  buffTrackerTab.anchorPointDropdown = anchorPointDropdown
+  yOffsetBuff = yOffsetBuff - anchorPointHeight - 10
+
+  -- Strata dropdown (TRACKER-SPECIFIC)
   local strataValues = {
     BACKGROUND = "BACKGROUND",
     LOW = "LOW",
@@ -2716,7 +2814,9 @@ CreateOptionsWindow_Part2 = function(contentArea, tabContent, f, tabs)
         local tiles = SkyInfoTiles.GetActiveTiles()
         for _, tile in ipairs(tiles) do
           if tile.key == "bufftracker" or tile.type == "bufftracker" then
-            return tile.strata or "MEDIUM"
+            local trackerType = tile.trackerType or "buffs"
+            local settings = GetTrackerSettings(tile, trackerType)
+            return settings.strata or "MEDIUM"
           end
         end
       end
@@ -2727,7 +2827,9 @@ CreateOptionsWindow_Part2 = function(contentArea, tabContent, f, tabs)
         local tiles = SkyInfoTiles.GetActiveTiles()
         for _, tile in ipairs(tiles) do
           if tile.key == "bufftracker" or tile.type == "bufftracker" then
-            tile.strata = value
+            local trackerType = tile.trackerType or "buffs"
+            local settings = GetTrackerSettings(tile, trackerType)
+            settings.strata = value
             if SkyInfoTiles.Rebuild and SkyInfoTiles.UpdateAll then
               SkyInfoTiles.Rebuild()
               SkyInfoTiles.UpdateAll()
@@ -2743,17 +2845,9 @@ CreateOptionsWindow_Part2 = function(contentArea, tabContent, f, tabs)
   yOffsetBuff = yOffsetBuff - strataHeight - 10
 
   -- Preview icon (shows what the tile looks like) - positioned first
-  local previewFrame = CreateFrame("Frame", nil, scrollChild, "BackdropTemplate")
+  local previewFrame = CreateFrame("Frame", nil, scrollChild)
   previewFrame:SetSize(80, 80)
   previewFrame:SetPoint("TOPRIGHT", scrollChild, "TOPRIGHT", -30, yOffsetBuff + 10)
-  previewFrame:SetBackdrop({
-    bgFile = "Interface\\Buttons\\WHITE8X8",
-    edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
-    tile = false, tileSize = 16, edgeSize = 16,
-    insets = { left = 4, right = 4, top = 4, bottom = 4 }
-  })
-  previewFrame:SetBackdropColor(0.1, 0.1, 0.1, 0.8)
-  previewFrame:SetBackdropBorderColor(0.6, 0.6, 0.6, 1)
 
   local previewIcon = previewFrame:CreateTexture(nil, "ARTWORK")
   previewIcon:SetPoint("CENTER")
@@ -2762,53 +2856,26 @@ CreateOptionsWindow_Part2 = function(contentArea, tabContent, f, tabs)
   previewIcon:SetTexCoord(0.07, 0.93, 0.07, 0.93)
 
   local previewText = previewFrame:CreateFontString(nil, "OVERLAY")
-  previewText:SetPoint("BOTTOM", previewIcon, "BOTTOM", 0, 2)
-  previewText:SetFont("Fonts\\FRIZQT__.ttf", 10, "OUTLINE")
-  previewText:SetText("45m")
+  previewText:SetPoint("CENTER", previewIcon, "CENTER", 0, 4)
+  previewText:SetFont("Fonts\\FRIZQT__.ttf", 14, "OUTLINE")
+  previewText:SetText("45s")
   previewText:SetTextColor(1, 1, 1, 1)
   previewText:SetShadowColor(0, 0, 0, 1)
   previewText:SetShadowOffset(1, -1)
 
-  -- Icon Size slider
-  -- Icon Size slider (styled)
-  local iconSizeRow, iconSizeH, iconSizeSlider = W:CreateSlider(scrollChild, yOffsetBuff, "Icon Size", 16, 64, 2,
-    function() -- getValue
-      if SkyInfoTiles.GetActiveTiles then
-        local tiles = SkyInfoTiles.GetActiveTiles()
-        for _, tile in ipairs(tiles) do
-          if tile.key == "bufftracker" or tile.type == "bufftracker" then
-            return tile.iconSize or 32
-          end
-        end
-      end
-      return 32
-    end,
-    function(val) -- setValue
-      if SkyInfoTiles.GetActiveTiles then
-        local tiles = SkyInfoTiles.GetActiveTiles()
-        for _, tile in ipairs(tiles) do
-          if tile.key == "bufftracker" or tile.type == "bufftracker" then
-            tile.iconSize = val
-            if SkyInfoTiles.Rebuild and SkyInfoTiles.UpdateAll then
-              SkyInfoTiles.Rebuild()
-              SkyInfoTiles.UpdateAll()
-            end
-            if buffTrackerTab.UpdatePreview then
-              buffTrackerTab.UpdatePreview()
-            end
-            break
-          end
-        end
-      end
-    end,
-    "Size of buff icons (16-64)"
-  )
-  buffTrackerTab.iconSizeSlider = iconSizeSlider
-  yOffsetBuff = yOffsetBuff - iconSizeH - 10
+  -- Count text (for potions tracker type)
+  local previewCount = previewFrame:CreateFontString(nil, "OVERLAY")
+  previewCount:SetPoint("BOTTOMRIGHT", previewIcon, "BOTTOMRIGHT", -2, 2)
+  previewCount:SetFont("Fonts\\FRIZQT__.ttf", 10, "OUTLINE")
+  previewCount:SetText("3")
+  previewCount:SetTextColor(1, 1, 1, 1)
+  previewCount:SetShadowColor(0, 0, 0, 1)
+  previewCount:SetShadowOffset(1, -1)
+  previewCount:Hide()  -- Hidden by default, shown only for potions
 
-  -- Font Size slider (styled)
-  local fontSizeRow, fontSizeH = W:CreateSlider(scrollChild, yOffsetBuff, "Time Font Size", 8, 32, 1,
-    function() -- getValue
+  -- Timer Font Size slider (GLOBAL setting)
+  local _, fontSizeH = W:CreateSlider(scrollChild, yOffsetBuff, "Timer Font Size", 8, 32, 1,
+    function()
       if SkyInfoTiles.GetActiveTiles then
         local tiles = SkyInfoTiles.GetActiveTiles()
         for _, tile in ipairs(tiles) do
@@ -2819,7 +2886,7 @@ CreateOptionsWindow_Part2 = function(contentArea, tabContent, f, tabs)
       end
       return 14
     end,
-    function(val) -- setValue
+    function(val)
       if SkyInfoTiles.GetActiveTiles then
         local tiles = SkyInfoTiles.GetActiveTiles()
         for _, tile in ipairs(tiles) do
@@ -2837,16 +2904,15 @@ CreateOptionsWindow_Part2 = function(contentArea, tabContent, f, tabs)
         end
       end
     end,
-    "Font size for buff timer text (8-32)"
+    "Font size for timer text (global setting)"
   )
   yOffsetBuff = yOffsetBuff - fontSizeH - 10
 
-  -- Font dropdown
+  -- Font dropdown (GLOBAL setting)
   local function DiscoverFonts()
     if SkyInfoTiles.Utils and SkyInfoTiles.Utils.DiscoverFonts then
       return SkyInfoTiles.Utils.DiscoverFonts()
     end
-    -- Fallback to basic fonts
     return {
       { path = "Fonts\\FRIZQT__.ttf", name = "Friz Quadrata (Default)" },
       { path = "Fonts\\ARIALN.ttf", name = "Arial Narrow" },
@@ -2864,7 +2930,7 @@ CreateOptionsWindow_Part2 = function(contentArea, tabContent, f, tabs)
     table.insert(fontOrder, fontInfo.path)
   end
 
-  local fontRow, fontHeight, fontDropdown = W:CreateDropdown(scrollChild, yOffsetBuff, "Time Font",
+  local _, fontHeight = W:CreateDropdown(scrollChild, yOffsetBuff, "Font",
     fontValues, fontOrder,
     function()
       local tiles = SkyInfoTiles.GetActiveTiles()
@@ -2893,39 +2959,37 @@ CreateOptionsWindow_Part2 = function(contentArea, tabContent, f, tabs)
         end
       end
     end,
-    "Choose the font for buff timer text"
+    "Choose the font for buff timer text (global setting)"
   )
-  buffTrackerTab.fontDropdown = fontDropdown
   yOffsetBuff = yOffsetBuff - fontHeight - 10
 
-  -- Direction dropdown
-  local directionValues = {
-    right = "right",
-    left = "left",
-    down = "down",
-    up = "up"
+  -- Outline dropdown (GLOBAL setting)
+  local outlineValues = {
+    NONE = "None",
+    OUTLINE = "Outline",
+    THICKOUTLINE = "Thick Outline"
   }
-  local directionOrder = { "right", "left", "down", "up" }
+  local outlineOrder = { "NONE", "OUTLINE", "THICKOUTLINE" }
 
-  local directionRow, directionHeight, directionDropdown = W:CreateDropdown(scrollChild, yOffsetBuff, "Icon Direction",
-    directionValues, directionOrder,
+  local _, outlineHeight = W:CreateDropdown(scrollChild, yOffsetBuff, "Outline",
+    outlineValues, outlineOrder,
     function()
       if SkyInfoTiles.GetActiveTiles then
         local tiles = SkyInfoTiles.GetActiveTiles()
         for _, tile in ipairs(tiles) do
           if tile.key == "bufftracker" or tile.type == "bufftracker" then
-            return tile.direction or "right"
+            return tile.outline or "OUTLINE"
           end
         end
       end
-      return "right"
+      return "OUTLINE"
     end,
     function(value)
       if SkyInfoTiles.GetActiveTiles then
         local tiles = SkyInfoTiles.GetActiveTiles()
         for _, tile in ipairs(tiles) do
           if tile.key == "bufftracker" or tile.type == "bufftracker" then
-            tile.direction = value
+            tile.outline = value
             if SkyInfoTiles.Rebuild and SkyInfoTiles.UpdateAll then
               SkyInfoTiles.Rebuild()
               SkyInfoTiles.UpdateAll()
@@ -2935,91 +2999,361 @@ CreateOptionsWindow_Part2 = function(contentArea, tabContent, f, tabs)
         end
       end
     end,
-    "Choose which direction icons expand in"
+    "Choose text outline style (global setting)"
   )
-  buffTrackerTab.directionDropdown = directionDropdown
-  yOffsetBuff = yOffsetBuff - directionHeight - 10
+  yOffsetBuff = yOffsetBuff - outlineHeight - 10
+
+  -- Count Font Size slider (GLOBAL setting)
+  local _, countFontSizeH = W:CreateSlider(scrollChild, yOffsetBuff, "Count Font Size", 6, 24, 1,
+    function()
+      if SkyInfoTiles.GetActiveTiles then
+        local tiles = SkyInfoTiles.GetActiveTiles()
+        for _, tile in ipairs(tiles) do
+          if tile.key == "bufftracker" or tile.type == "bufftracker" then
+            return tile.countFontSize or 12
+          end
+        end
+      end
+      return 12
+    end,
+    function(val)
+      if SkyInfoTiles.GetActiveTiles then
+        local tiles = SkyInfoTiles.GetActiveTiles()
+        for _, tile in ipairs(tiles) do
+          if tile.key == "bufftracker" or tile.type == "bufftracker" then
+            tile.countFontSize = val
+            if SkyInfoTiles.Rebuild and SkyInfoTiles.UpdateAll then
+              SkyInfoTiles.Rebuild()
+              SkyInfoTiles.UpdateAll()
+            end
+            if buffTrackerTab.UpdatePreview then
+              buffTrackerTab.UpdatePreview()
+            end
+            break
+          end
+        end
+      end
+    end,
+    "Font size for count text (global setting)"
+  )
+  yOffsetBuff = yOffsetBuff - countFontSizeH - 10
+
+  -- Timer Text Offset X slider (global)
+  local _, timerOffsetXH = W:CreateSlider(scrollChild, yOffsetBuff, "Timer Text Offset X", -30, 30, 1,
+    function()
+      if SkyInfoTiles.GetActiveTiles then
+        local tiles = SkyInfoTiles.GetActiveTiles()
+        for _, tile in ipairs(tiles) do
+          if tile.key == "bufftracker" or tile.type == "bufftracker" then
+            return tile.timerOffsetX or 0
+          end
+        end
+      end
+      return 0
+    end,
+    function(val)
+      if SkyInfoTiles.GetActiveTiles then
+        local tiles = SkyInfoTiles.GetActiveTiles()
+        for _, tile in ipairs(tiles) do
+          if tile.key == "bufftracker" or tile.type == "bufftracker" then
+            tile.timerOffsetX = val
+            if SkyInfoTiles.Rebuild and SkyInfoTiles.UpdateAll then
+              SkyInfoTiles.Rebuild()
+              SkyInfoTiles.UpdateAll()
+            end
+            if buffTrackerTab.UpdatePreview then
+              buffTrackerTab.UpdatePreview()
+            end
+            break
+          end
+        end
+      end
+    end,
+    "Horizontal offset for timer text (global setting)"
+  )
+  yOffsetBuff = yOffsetBuff - timerOffsetXH - 10
+
+  -- Timer Text Offset Y slider (global)
+  local _, timerOffsetYH = W:CreateSlider(scrollChild, yOffsetBuff, "Timer Text Offset Y", -30, 30, 1,
+    function()
+      if SkyInfoTiles.GetActiveTiles then
+        local tiles = SkyInfoTiles.GetActiveTiles()
+        for _, tile in ipairs(tiles) do
+          if tile.key == "bufftracker" or tile.type == "bufftracker" then
+            return tile.timerOffsetY or 4
+          end
+        end
+      end
+      return 4
+    end,
+    function(val)
+      if SkyInfoTiles.GetActiveTiles then
+        local tiles = SkyInfoTiles.GetActiveTiles()
+        for _, tile in ipairs(tiles) do
+          if tile.key == "bufftracker" or tile.type == "bufftracker" then
+            tile.timerOffsetY = val
+            if SkyInfoTiles.Rebuild and SkyInfoTiles.UpdateAll then
+              SkyInfoTiles.Rebuild()
+              SkyInfoTiles.UpdateAll()
+            end
+            if buffTrackerTab.UpdatePreview then
+              buffTrackerTab.UpdatePreview()
+            end
+            break
+          end
+        end
+      end
+    end,
+    "Vertical offset for timer text (global setting)"
+  )
+  yOffsetBuff = yOffsetBuff - timerOffsetYH - 10
+
+  -- Count Text Offset X slider (global)
+  local _, countOffsetXH = W:CreateSlider(scrollChild, yOffsetBuff, "Count Text Offset X", -30, 30, 1,
+    function()
+      if SkyInfoTiles.GetActiveTiles then
+        local tiles = SkyInfoTiles.GetActiveTiles()
+        for _, tile in ipairs(tiles) do
+          if tile.key == "bufftracker" or tile.type == "bufftracker" then
+            return tile.countOffsetX or -2
+          end
+        end
+      end
+      return -2
+    end,
+    function(val)
+      if SkyInfoTiles.GetActiveTiles then
+        local tiles = SkyInfoTiles.GetActiveTiles()
+        for _, tile in ipairs(tiles) do
+          if tile.key == "bufftracker" or tile.type == "bufftracker" then
+            tile.countOffsetX = val
+            if SkyInfoTiles.Rebuild and SkyInfoTiles.UpdateAll then
+              SkyInfoTiles.Rebuild()
+              SkyInfoTiles.UpdateAll()
+            end
+            if buffTrackerTab.UpdatePreview then
+              buffTrackerTab.UpdatePreview()
+            end
+            break
+          end
+        end
+      end
+    end,
+    "Horizontal offset for count text (global setting)"
+  )
+  yOffsetBuff = yOffsetBuff - countOffsetXH - 10
+
+  -- Count Text Offset Y slider (global)
+  local _, countOffsetYH = W:CreateSlider(scrollChild, yOffsetBuff, "Count Text Offset Y", -30, 30, 1,
+    function()
+      if SkyInfoTiles.GetActiveTiles then
+        local tiles = SkyInfoTiles.GetActiveTiles()
+        for _, tile in ipairs(tiles) do
+          if tile.key == "bufftracker" or tile.type == "bufftracker" then
+            return tile.countOffsetY or 2
+          end
+        end
+      end
+      return 2
+    end,
+    function(val)
+      if SkyInfoTiles.GetActiveTiles then
+        local tiles = SkyInfoTiles.GetActiveTiles()
+        for _, tile in ipairs(tiles) do
+          if tile.key == "bufftracker" or tile.type == "bufftracker" then
+            tile.countOffsetY = val
+            if SkyInfoTiles.Rebuild and SkyInfoTiles.UpdateAll then
+              SkyInfoTiles.Rebuild()
+              SkyInfoTiles.UpdateAll()
+            end
+            if buffTrackerTab.UpdatePreview then
+              buffTrackerTab.UpdatePreview()
+            end
+            break
+          end
+        end
+      end
+    end,
+    "Vertical offset for count text (global setting)"
+  )
+  yOffsetBuff = yOffsetBuff - countOffsetYH - 10
+
+  -- Tracker-specific options
+  local currentTrackerType = "buffs"
+  if SkyInfoTiles.GetActiveTiles then
+    local tiles = SkyInfoTiles.GetActiveTiles()
+    for _, tile in ipairs(tiles) do
+      if tile.key == "bufftracker" or tile.type == "bufftracker" then
+        currentTrackerType = tile.trackerType or "buffs"
+        break
+      end
+    end
+  end
+
+  if currentTrackerType == "trinkets" then
+    -- Show Passive Trinkets toggle (GLOBAL setting - not tracker-specific)
+    local _, showPassiveH = W:CreateToggle(scrollChild, yOffsetBuff, "Show Passive Trinkets",
+      function()
+        if SkyInfoTiles.GetActiveTiles then
+          local tiles = SkyInfoTiles.GetActiveTiles()
+          for _, tile in ipairs(tiles) do
+            if tile.key == "bufftracker" or tile.type == "bufftracker" then
+              return tile.showPassiveTrinkets or false
+            end
+          end
+        end
+        return false
+      end,
+      function(val)
+        if SkyInfoTiles.GetActiveTiles then
+          local tiles = SkyInfoTiles.GetActiveTiles()
+          for _, tile in ipairs(tiles) do
+            if tile.key == "bufftracker" or tile.type == "bufftracker" then
+              tile.showPassiveTrinkets = val
+              if SkyInfoTiles.Rebuild and SkyInfoTiles.UpdateAll then
+                SkyInfoTiles.Rebuild()
+                SkyInfoTiles.UpdateAll()
+              end
+              break
+            end
+          end
+        end
+      end,
+      "Show trinkets without on-use abilities (global setting)"
+    )
+    yOffsetBuff = yOffsetBuff - showPassiveH
+  end
 
   -- Function to update preview based on current settings
   local function UpdatePreview()
-    local iconSize = 32
-    local fontSize = 10
+    if not previewIcon or not previewText then return end
+
+    local trackerType = "buffs"
+    local fontSize = 14
     local font = "Fonts\\FRIZQT__.ttf"
+    local timerOffsetX = 0
+    local timerOffsetY = 4
+    local countOffsetX = -2
+    local countOffsetY = 2
 
     -- Get current settings from tile config
     if SkyInfoTiles.GetActiveTiles then
       local tiles = SkyInfoTiles.GetActiveTiles()
       for _, tile in ipairs(tiles) do
         if tile.key == "bufftracker" or tile.type == "bufftracker" then
+          trackerType = tile.trackerType or "buffs"
           fontSize = tile.fontSize or 14
           font = tile.font or "Fonts\\FRIZQT__.ttf"
-          iconSize = tile.iconSize or 32
+          timerOffsetX = tile.timerOffsetX or 0
+          timerOffsetY = tile.timerOffsetY or 4
+          countOffsetX = tile.countOffsetX or -2
+          countOffsetY = tile.countOffsetY or 2
           break
         end
       end
     end
 
-    -- Update preview frame size to fit icon + padding
-    local frameSize = math.min(80, iconSize + 16)
-    previewFrame:SetSize(frameSize, frameSize)
+    -- Always use the same icon for preview
+    previewIcon:SetTexture("Interface\\Icons\\Spell_Holy_MagicalSentry")
 
-    -- Update preview icon size (cap at 64 to fit in frame)
-    local displayIconSize = math.min(64, iconSize)
-    previewIcon:SetSize(displayIconSize, displayIconSize)
+    -- Set icon size based on tracker type (matching actual sizes)
+    local iconSize = 32
+    if trackerType == "trinkets" then
+      iconSize = 30
+    elseif trackerType == "potions" then
+      iconSize = 40
+    end
 
-    -- Update preview text font
+    previewIcon:SetSize(iconSize, iconSize)
+
+    -- Update text with font settings
     pcall(previewText.SetFont, previewText, font, fontSize, "OUTLINE")
+
+    -- Show time text with configurable offset
+    previewText:SetText("45s")
+    previewText:ClearAllPoints()
+    previewText:SetPoint("CENTER", previewIcon, "CENTER", timerOffsetX, timerOffsetY)
+
+    -- Update count text
+    if previewCount then
+      local countFontSize = 12
+      if SkyInfoTiles.GetActiveTiles then
+        local tiles = SkyInfoTiles.GetActiveTiles()
+        for _, tile in ipairs(tiles) do
+          if tile.key == "bufftracker" or tile.type == "bufftracker" then
+            countFontSize = tile.countFontSize or 12
+            break
+          end
+        end
+      end
+
+      pcall(previewCount.SetFont, previewCount, font, countFontSize, "OUTLINE")
+
+      -- Always show count in preview with configurable offset
+      previewCount:SetText("3")
+      previewCount:ClearAllPoints()
+      previewCount:SetPoint("BOTTOMRIGHT", previewIcon, "BOTTOMRIGHT", countOffsetX, countOffsetY)
+      previewCount:Show()
+    end
   end
 
   buffTrackerTab.UpdatePreview = UpdatePreview
 
+  -- Buff list management (always created, but shown/hidden based on tracker type)
+  -- Create container frame for all buff list UI elements
+  local buffListContainer = CreateFrame("Frame", nil, scrollChild)
+  buffListContainer:SetPoint("TOPLEFT", 0, yOffsetBuff)
+  buffListContainer:SetSize(600, 400)
+
+  local buffListYOffset = -10
+
   -- Buff list header
-  local buffListLabel = scrollChild:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
-  buffListLabel:SetPoint("TOPLEFT", 10, yOffsetBuff)
+  local buffListLabel = buffListContainer:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
+  buffListLabel:SetPoint("TOPLEFT", 10, buffListYOffset)
   buffListLabel:SetText("Tracked Buffs (Spell IDs):")
   buffListLabel:SetTextColor(1, 0.82, 0, 1)
-  yOffsetBuff = yOffsetBuff - 30
+  buffListYOffset = buffListYOffset - 30
 
   -- Add buff button and editbox
-  local addBuffLabel = scrollChild:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-  addBuffLabel:SetPoint("TOPLEFT", 10, yOffsetBuff)
+  local addBuffLabel = buffListContainer:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+  addBuffLabel:SetPoint("TOPLEFT", 10, buffListYOffset)
   addBuffLabel:SetText("Add Buff ID:")
   addBuffLabel:SetTextColor(1, 1, 1, 1)
 
-  local addBuffEditBox = CreateFrame("EditBox", nil, scrollChild)
-  addBuffEditBox:SetSize(100, 24)
-  addBuffEditBox:SetPoint("LEFT", addBuffLabel, "RIGHT", 10, 0)
-  addBuffEditBox:SetAutoFocus(false)
-  addBuffEditBox:SetNumeric(true)
-  addBuffEditBox:SetFont("Fonts\\FRIZQT__.ttf", 11, "OUTLINE")
-  addBuffEditBox:SetTextColor(1, 1, 1)
-  addBuffEditBox:SetJustifyH("CENTER")
+  local addBuffEditBox = CreateFrame("EditBox", nil, buffListContainer)
+    addBuffEditBox:SetSize(100, 24)
+    addBuffEditBox:SetPoint("LEFT", addBuffLabel, "RIGHT", 10, 0)
+    addBuffEditBox:SetAutoFocus(false)
+    addBuffEditBox:SetNumeric(true)
+    addBuffEditBox:SetFont("Fonts\\FRIZQT__.ttf", 11, "OUTLINE")
+    addBuffEditBox:SetTextColor(1, 1, 1)
+    addBuffEditBox:SetJustifyH("CENTER")
 
-  -- EditBox background (ultra-dark, matching StyledWidgets)
-  local editBg = addBuffEditBox:CreateTexture(nil, "BACKGROUND")
-  editBg:SetColorTexture(0.02, 0.03, 0.04, 0.95)
-  editBg:SetAllPoints()
+    -- EditBox background (ultra-dark, matching StyledWidgets)
+    local editBg = addBuffEditBox:CreateTexture(nil, "BACKGROUND")
+    editBg:SetColorTexture(0.02, 0.03, 0.04, 0.95)
+    editBg:SetAllPoints()
 
-  -- EditBox border (subtle white, matching StyledWidgets)
-  local editBorder = CreateFrame("Frame", nil, addBuffEditBox)
-  editBorder:SetAllPoints()
-  local borderTop = editBorder:CreateTexture(nil, "ARTWORK")
-  borderTop:SetColorTexture(1, 1, 1, 0.08)
-  borderTop:SetPoint("TOPLEFT", 0, 0)
-  borderTop:SetPoint("TOPRIGHT", 0, 0)
-  borderTop:SetHeight(1)
+    -- EditBox border (subtle white, matching StyledWidgets)
+    local editBorder = CreateFrame("Frame", nil, addBuffEditBox)
+    editBorder:SetAllPoints()
+    local borderTop = editBorder:CreateTexture(nil, "ARTWORK")
+    borderTop:SetColorTexture(1, 1, 1, 0.08)
+    borderTop:SetPoint("TOPLEFT", 0, 0)
+    borderTop:SetPoint("TOPRIGHT", 0, 0)
+    borderTop:SetHeight(1)
 
-  local borderBottom = editBorder:CreateTexture(nil, "ARTWORK")
-  borderBottom:SetColorTexture(1, 1, 1, 0.08)
-  borderBottom:SetPoint("BOTTOMLEFT", 0, 0)
-  borderBottom:SetPoint("BOTTOMRIGHT", 0, 0)
-  borderBottom:SetHeight(1)
+    local borderBottom = editBorder:CreateTexture(nil, "ARTWORK")
+    borderBottom:SetColorTexture(1, 1, 1, 0.08)
+    borderBottom:SetPoint("BOTTOMLEFT", 0, 0)
+    borderBottom:SetPoint("BOTTOMRIGHT", 0, 0)
+    borderBottom:SetHeight(1)
 
-  -- Handle text input
-  addBuffEditBox:SetScript("OnEscapePressed", function(self) self:ClearFocus() end)
-  addBuffEditBox:SetScript("OnEnterPressed", function(self) self:ClearFocus() end)
+    -- Handle text input
+    addBuffEditBox:SetScript("OnEscapePressed", function(self) self:ClearFocus() end)
+    addBuffEditBox:SetScript("OnEnterPressed", function(self) self:ClearFocus() end)
 
-  local addBuffButton = CreateFrame("Button", nil, scrollChild, "UIPanelButtonTemplate")
+  local addBuffButton = CreateFrame("Button", nil, buffListContainer, "UIPanelButtonTemplate")
   addBuffButton:SetSize(60, 22)
   addBuffButton:SetPoint("LEFT", addBuffEditBox, "RIGHT", 10, 0)
   addBuffButton:SetText("Add")
@@ -3052,169 +3386,195 @@ CreateOptionsWindow_Part2 = function(contentArea, tabContent, f, tabs)
     end
   end)
 
-  yOffsetBuff = yOffsetBuff - 40
+  buffListYOffset = buffListYOffset - 40
 
   -- Buff list container
-  buffTrackerTab._buffListStartY = yOffsetBuff
+  buffTrackerTab._buffListStartY = buffListYOffset
   buffTrackerTab._buffEntries = {}  -- Store all created entries for cleanup
 
   -- Function to rebuild buff list
   function buffTrackerTab.RebuildBuffList()
-    -- Clear existing buff entries properly
-    if buffTrackerTab._buffEntries then
-      for _, entry in ipairs(buffTrackerTab._buffEntries) do
-        if entry.iconFrame then
-          entry.iconFrame:Hide()
-          entry.iconFrame:SetParent(nil)
-        end
-        if entry.label then
-          entry.label:Hide()
-          entry.label:SetText("")
-        end
-        if entry.upBtn then
-          entry.upBtn:Hide()
-          entry.upBtn:SetParent(nil)
-        end
-        if entry.downBtn then
-          entry.downBtn:Hide()
-          entry.downBtn:SetParent(nil)
-        end
-        if entry.removeBtn then
-          entry.removeBtn:Hide()
-          entry.removeBtn:SetParent(nil)
+      -- Clear existing buff entries properly
+      if buffTrackerTab._buffEntries then
+        for _, entry in ipairs(buffTrackerTab._buffEntries) do
+          if entry.iconFrame then
+            entry.iconFrame:Hide()
+            entry.iconFrame:SetParent(nil)
+          end
+          if entry.label then
+            entry.label:Hide()
+            entry.label:SetText("")
+          end
+          if entry.upBtn then
+            entry.upBtn:Hide()
+            entry.upBtn:SetParent(nil)
+          end
+          if entry.downBtn then
+            entry.downBtn:Hide()
+            entry.downBtn:SetParent(nil)
+          end
+          if entry.removeBtn then
+            entry.removeBtn:Hide()
+            entry.removeBtn:SetParent(nil)
+          end
         end
       end
-    end
-    buffTrackerTab._buffEntries = {}
+      buffTrackerTab._buffEntries = {}
 
-    local list = SkyInfoTiles.GetBuffTrackerList and SkyInfoTiles.GetBuffTrackerList() or {}
-    local y = buffTrackerTab._buffListStartY or -10
+      local list = SkyInfoTiles.GetBuffTrackerList and SkyInfoTiles.GetBuffTrackerList() or {}
+      local y = buffTrackerTab._buffListStartY or -10
 
-    for index, buffID in ipairs(list) do
-      local currentIndex = index  -- Capture index for closure
-      local entry = {}
+      for index, buffID in ipairs(list) do
+        local currentIndex = index  -- Capture index for closure
+        local entry = {}
 
-      -- Spell icon
-      local iconFrame = CreateFrame("Frame", nil, scrollChild)
+        -- Spell icon
+      local iconFrame = CreateFrame("Frame", nil, buffListContainer)
       iconFrame:SetSize(20, 20)
       iconFrame:SetPoint("TOPLEFT", 20, y)
 
-      local iconTexture = iconFrame:CreateTexture(nil, "ARTWORK")
-      iconTexture:SetAllPoints(iconFrame)
-      iconTexture:SetTexCoord(0.07, 0.93, 0.07, 0.93)  -- Crop borders
+        local iconTexture = iconFrame:CreateTexture(nil, "ARTWORK")
+        iconTexture:SetAllPoints(iconFrame)
+        iconTexture:SetTexCoord(0.07, 0.93, 0.07, 0.93)  -- Crop borders
 
-      -- Get spell info (name and icon)
-      local spellName = "Unknown"
-      local spellIcon = "Interface\\Icons\\INV_Misc_QuestionMark"
+        -- Get spell info (name and icon)
+        local spellName = "Unknown"
+        local spellIcon = "Interface\\Icons\\INV_Misc_QuestionMark"
 
-      if C_Spell and C_Spell.GetSpellTexture then
-        local icon = C_Spell.GetSpellTexture(buffID)
-        if icon then
-          spellIcon = icon
+        if C_Spell and C_Spell.GetSpellTexture then
+          local icon = C_Spell.GetSpellTexture(buffID)
+          if icon then
+            spellIcon = icon
+          end
+        elseif GetSpellTexture then
+          local icon = GetSpellTexture(buffID)
+          if icon then
+            spellIcon = icon
+          end
         end
-      elseif GetSpellTexture then
-        local icon = GetSpellTexture(buffID)
-        if icon then
-          spellIcon = icon
-        end
-      end
 
-      if C_Spell and C_Spell.GetSpellName then
-        local name = C_Spell.GetSpellName(buffID)
-        if name then
-          spellName = name
+        if C_Spell and C_Spell.GetSpellName then
+          local name = C_Spell.GetSpellName(buffID)
+          if name then
+            spellName = name
+          end
+        elseif GetSpellInfo then
+          local name = GetSpellInfo(buffID)
+          if name then
+            spellName = name
+          end
         end
-      elseif GetSpellInfo then
-        local name = GetSpellInfo(buffID)
-        if name then
-          spellName = name
-        end
-      end
 
-      iconTexture:SetTexture(spellIcon)
-      entry.iconFrame = iconFrame
+        iconTexture:SetTexture(spellIcon)
+        entry.iconFrame = iconFrame
 
       -- Buff ID label with spell name (positioned after icon)
-      local buffLabel = scrollChild:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+      local buffLabel = buffListContainer:CreateFontString(nil, "OVERLAY", "GameFontNormal")
       buffLabel:SetPoint("LEFT", iconFrame, "RIGHT", 5, 0)
       buffLabel:SetText(spellName .. " (" .. tostring(buffID) .. ")")
       entry.label = buffLabel
 
       -- Up button
-      local upBtn = CreateFrame("Button", nil, scrollChild, "UIPanelButtonTemplate")
+      local upBtn = CreateFrame("Button", nil, buffListContainer, "UIPanelButtonTemplate")
       upBtn:SetSize(30, 22)
       upBtn:SetPoint("LEFT", buffLabel, "RIGHT", 10, 0)
       upBtn:SetText("Up")
-      upBtn:SetScript("OnClick", function()
-        local freshList = SkyInfoTiles.GetBuffTrackerList and SkyInfoTiles.GetBuffTrackerList() or {}
-        if currentIndex > 1 and currentIndex <= #freshList then
-          freshList[currentIndex], freshList[currentIndex-1] = freshList[currentIndex-1], freshList[currentIndex]
-          if SkyInfoTiles.SaveBuffTrackerList then
-            SkyInfoTiles.SaveBuffTrackerList(freshList)
+        upBtn:SetScript("OnClick", function()
+          local freshList = SkyInfoTiles.GetBuffTrackerList and SkyInfoTiles.GetBuffTrackerList() or {}
+          if currentIndex > 1 and currentIndex <= #freshList then
+            freshList[currentIndex], freshList[currentIndex-1] = freshList[currentIndex-1], freshList[currentIndex]
+            if SkyInfoTiles.SaveBuffTrackerList then
+              SkyInfoTiles.SaveBuffTrackerList(freshList)
+            end
+            buffTrackerTab.RebuildBuffList()
+            if SkyInfoTiles.Rebuild and SkyInfoTiles.UpdateAll then
+              SkyInfoTiles.Rebuild()
+              SkyInfoTiles.UpdateAll()
+            end
           end
-          buffTrackerTab.RebuildBuffList()
-          if SkyInfoTiles.Rebuild and SkyInfoTiles.UpdateAll then
-            SkyInfoTiles.Rebuild()
-            SkyInfoTiles.UpdateAll()
-          end
-        end
-      end)
-      if currentIndex == 1 then upBtn:Disable() end
-      entry.upBtn = upBtn
+        end)
+        if currentIndex == 1 then upBtn:Disable() end
+        entry.upBtn = upBtn
 
       -- Down button
-      local downBtn = CreateFrame("Button", nil, scrollChild, "UIPanelButtonTemplate")
+      local downBtn = CreateFrame("Button", nil, buffListContainer, "UIPanelButtonTemplate")
       downBtn:SetSize(40, 22)
       downBtn:SetPoint("LEFT", upBtn, "RIGHT", 5, 0)
       downBtn:SetText("Down")
-      downBtn:SetScript("OnClick", function()
-        local freshList = SkyInfoTiles.GetBuffTrackerList and SkyInfoTiles.GetBuffTrackerList() or {}
-        if currentIndex < #freshList and currentIndex > 0 then
-          freshList[currentIndex], freshList[currentIndex+1] = freshList[currentIndex+1], freshList[currentIndex]
-          if SkyInfoTiles.SaveBuffTrackerList then
-            SkyInfoTiles.SaveBuffTrackerList(freshList)
+        downBtn:SetScript("OnClick", function()
+          local freshList = SkyInfoTiles.GetBuffTrackerList and SkyInfoTiles.GetBuffTrackerList() or {}
+          if currentIndex < #freshList and currentIndex > 0 then
+            freshList[currentIndex], freshList[currentIndex+1] = freshList[currentIndex+1], freshList[currentIndex]
+            if SkyInfoTiles.SaveBuffTrackerList then
+              SkyInfoTiles.SaveBuffTrackerList(freshList)
+            end
+            buffTrackerTab.RebuildBuffList()
+            if SkyInfoTiles.Rebuild and SkyInfoTiles.UpdateAll then
+              SkyInfoTiles.Rebuild()
+              SkyInfoTiles.UpdateAll()
+            end
           end
-          buffTrackerTab.RebuildBuffList()
-          if SkyInfoTiles.Rebuild and SkyInfoTiles.UpdateAll then
-            SkyInfoTiles.Rebuild()
-            SkyInfoTiles.UpdateAll()
-          end
-        end
-      end)
-      if currentIndex == #list then downBtn:Disable() end
-      entry.downBtn = downBtn
+        end)
+        if currentIndex == #list then downBtn:Disable() end
+        entry.downBtn = downBtn
 
       -- Remove button
-      local removeBtn = CreateFrame("Button", nil, scrollChild, "UIPanelButtonTemplate")
+      local removeBtn = CreateFrame("Button", nil, buffListContainer, "UIPanelButtonTemplate")
       removeBtn:SetSize(60, 22)
       removeBtn:SetPoint("LEFT", downBtn, "RIGHT", 5, 0)
       removeBtn:SetText("Remove")
-      removeBtn:SetScript("OnClick", function()
-        local freshList = SkyInfoTiles.GetBuffTrackerList and SkyInfoTiles.GetBuffTrackerList() or {}
-        if currentIndex > 0 and currentIndex <= #freshList then
-          table.remove(freshList, currentIndex)
-          if SkyInfoTiles.SaveBuffTrackerList then
-            SkyInfoTiles.SaveBuffTrackerList(freshList)
+        removeBtn:SetScript("OnClick", function()
+          local freshList = SkyInfoTiles.GetBuffTrackerList and SkyInfoTiles.GetBuffTrackerList() or {}
+          if currentIndex > 0 and currentIndex <= #freshList then
+            table.remove(freshList, currentIndex)
+            if SkyInfoTiles.SaveBuffTrackerList then
+              SkyInfoTiles.SaveBuffTrackerList(freshList)
+            end
+            buffTrackerTab.RebuildBuffList()
+            if SkyInfoTiles.Rebuild and SkyInfoTiles.UpdateAll then
+              SkyInfoTiles.Rebuild()
+              SkyInfoTiles.UpdateAll()
+            end
           end
-          buffTrackerTab.RebuildBuffList()
-          if SkyInfoTiles.Rebuild and SkyInfoTiles.UpdateAll then
-            SkyInfoTiles.Rebuild()
-            SkyInfoTiles.UpdateAll()
-          end
-        end
-      end)
-      entry.removeBtn = removeBtn
+        end)
+        entry.removeBtn = removeBtn
 
       table.insert(buffTrackerTab._buffEntries, entry)
       y = y - 30
     end
 
-    -- Update scroll child height
-    scrollChild:SetHeight(math.abs(y) + 100)
+    -- Update container height
+    buffListContainer:SetHeight(math.abs(y) + 100)
   end
 
-  -- Initial build
+  -- Store reference to container
+  buffTrackerTab.buffListContainer = buffListContainer
+
+  -- Function to update buff list visibility based on tracker type
+  function buffTrackerTab.UpdateBuffListVisibility()
+    if not buffTrackerTab.buffListContainer then return end
+
+    local currentTrackerType = "buffs"
+    if SkyInfoTiles.GetActiveTiles then
+      local tiles = SkyInfoTiles.GetActiveTiles()
+      for _, tile in ipairs(tiles) do
+        if tile.key == "bufftracker" or tile.type == "bufftracker" then
+          currentTrackerType = tile.trackerType or "buffs"
+          break
+        end
+      end
+    end
+
+    if currentTrackerType == "buffs" then
+      buffTrackerTab.buffListContainer:Show()
+    else
+      buffTrackerTab.buffListContainer:Hide()
+    end
+  end
+
+  -- Initial build and visibility update
   buffTrackerTab.RebuildBuffList()
+  buffTrackerTab.UpdateBuffListVisibility()
 
   -- === TAB 9: INFOBAR ===
   CreateInfoBarTab(contentArea, tabContent)
