@@ -1185,11 +1185,13 @@ local function CreateOptionsWindow()
           tile.x = screenWidth / 2
           tile.y = -screenHeight / 2
 
-          -- Update sliders
-          xPosSlider:SetValue(tile.x)
-          xPosEditBox:SetText(tostring(math.floor(tile.x)))
-          yPosSlider:SetValue(tile.y)
-          yPosEditBox:SetText(tostring(math.floor(tile.y)))
+          -- Update sliders via refresh
+          if xPosSlider and xPosSlider.Refresh then
+            xPosSlider:Refresh()
+          end
+          if yPosSlider and yPosSlider.Refresh then
+            yPosSlider:Refresh()
+          end
           if SkyInfoTiles.Rebuild then
             SkyInfoTiles.Rebuild()
           end
@@ -4236,9 +4238,7 @@ function SkyInfoTiles.ToggleOptionsWindow()
   end
 end
 
--- Slash command to open window
-SLASH_SKYINFOTILES1 = "/skyinfotiles"
-SLASH_SKYINFOTILES2 = "/sit"
-SlashCmdList["SKYINFOTILES"] = function()
-  SkyInfoTiles.ToggleOptionsWindow()
-end
+-- Note: Slash commands are registered in SkyInfoTiles.lua main file
+-- The main handler provides /skytiles, /skyinfotiles, /infotiles commands
+-- with full command parsing (lock, unlock, enable, disable, options, etc.)
+-- We do NOT register slash commands here to avoid overwriting the main handler
