@@ -349,6 +349,15 @@ local function UpdateFrameAnchor(frame, cfg)
   cfg = GetEffectiveConfig(cfg or {})
   local anchorPoint = cfg.anchorPoint or "TOPLEFT"
 
+  -- If anchor is NONE, hide the tracker
+  if anchorPoint == "NONE" then
+    frame:Hide()
+    return
+  end
+
+  -- Make sure frame is visible if anchor is not NONE
+  frame:Show()
+
   local playerFrame = ResolvePlayerFrame()
   if not playerFrame then
     -- Fallback to center if no player frame

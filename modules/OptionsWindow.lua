@@ -3084,8 +3084,9 @@ CreateOptionsWindow_Part2 = function(contentArea, tabContent, f, tabs)
   -- RefreshLayout will add deltaY when buffListContainer is visible
   local initialYOffsetAfterBuffList = yOffsetBuff
 
-  -- Anchor Point dropdown (TRACKER-SPECIFIC - 6 options only)
+  -- Anchor Point dropdown (TRACKER-SPECIFIC - 7 options including NONE)
   local anchorPointValues = {
+    NONE = "None (Don't Show)",
     TOPLEFT = "Top Left",
     TOPRIGHT = "Top Right",
     BOTTOMLEFT = "Bottom Left",
@@ -3093,7 +3094,7 @@ CreateOptionsWindow_Part2 = function(contentArea, tabContent, f, tabs)
     TOP = "Top",
     BOTTOM = "Bottom"
   }
-  local anchorPointOrder = { "TOPLEFT", "TOPRIGHT", "BOTTOMLEFT", "BOTTOMRIGHT", "TOP", "BOTTOM" }
+  local anchorPointOrder = { "NONE", "TOPLEFT", "TOPRIGHT", "BOTTOMLEFT", "BOTTOMRIGHT", "TOP", "BOTTOM" }
 
   local anchorPointRow, anchorPointHeight, anchorPointDropdown = W:CreateDropdown(scrollChild, initialYOffsetAfterBuffList, "Anchor Point",
     anchorPointValues, anchorPointOrder,
@@ -3127,7 +3128,7 @@ CreateOptionsWindow_Part2 = function(contentArea, tabContent, f, tabs)
         end
       end
     end,
-    "Position relative to player frame"
+    "Position relative to player frame (or None to hide)"
   )
   buffTrackerTab.anchorPointDropdown = anchorPointDropdown
   buffTrackerTab.anchorPointRow = anchorPointRow  -- Store reference for layout refresh
