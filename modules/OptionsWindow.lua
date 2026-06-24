@@ -3720,13 +3720,6 @@ CreateOptionsWindow_Part2 = function(contentArea, tabContent, f, tabs)
     function(value)
       local success, err = SkyInfoTiles.SetActiveProfile(value)
       if success then
-        -- Refresh dropdown to show new profile list (in case it changed)
-        local newValues, newOrder = GetProfileValues()
-        profileDropdown._values = newValues
-        profileDropdown._order = newOrder
-        if profileDropdown.Refresh then
-          profileDropdown:Refresh()
-        end
         if SkyInfoTiles._OptionsRefresh then
           SkyInfoTiles._OptionsRefresh()
         end
