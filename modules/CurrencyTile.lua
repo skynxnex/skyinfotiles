@@ -48,6 +48,30 @@ local CURRENCIES = {
 -- Export currency list for OptionsWindow
 SkyInfoTiles._currencyList = CURRENCIES
 
+-- Max level gate
+local function IsAtMaxLevel()
+  local cur = (UnitLevel and UnitLevel("player")) or nil
+  local mx = (GetMaxLevelForPlayerExpansion and GetMaxLevelForPlayerExpansion()) or (MAX_PLAYER_LEVEL) or nil
+  if cur and mx then return cur >= mx end
+  return true
+end
+
+-- Check if an entry is available (discovered or owned) - used for below-max-level filtering
+local function IsEntryAvailable(entry)
+  if entry.itemID then
+    return (C_Item.GetItemCount(entry.itemID, true) or 0) > 0
+  end
+
+  if entry.id then
+    local ci = C_CurrencyInfo.GetCurrencyInfo(entry.id)
+    if not ci then return false end
+    if ci.discovered ~= nil then return ci.discovered end
+    return (ci.quantity or 0) > 0
+  end
+
+  return false
+end
+
 local function GetActiveCurrencyEntries()
   -- Filter based on user selection
   if not SkyInfoTilesDB or not SkyInfoTilesDB.currencySettings then
@@ -71,8 +95,11 @@ local function GetActiveCurrencyEntries()
       if enabled == nil then enabled = true end -- Default to enabled
 
       if enabled then
-        table.insert(filtered, entry)
-        lastWasSeparator = false
+        local belowMax = not IsAtMaxLevel()
+        if (not belowMax) or IsEntryAvailable(entry) then
+          table.insert(filtered, entry)
+          lastWasSeparator = false
+        end
       end
     end
   end
@@ -114,14 +141,6 @@ local ICON_SIZE  = 18
 local PAD_X      = 8
 local PAD_Y      = 6
 local FONT       = "GameFontNormal"
-
--- Max level gate
-local function IsAtMaxLevel()
-  local cur = (UnitLevel and UnitLevel("player")) or nil
-  local mx = (GetMaxLevelForPlayerExpansion and GetMaxLevelForPlayerExpansion()) or (MAX_PLAYER_LEVEL) or nil
-  if cur and mx then return cur >= mx end
-  return true
-end
 
 -- Read additional details (caps, total earned) by currencyID.
 local function ReadDetails(currencyID)
@@ -424,17 +443,11 @@ function API.create(parent, cfg)
 end
 
 function API.update(frame, cfg)
-  -- Max level gating
-  if not IsAtMaxLevel() then
-    if not (InCombatLockdown and InCombatLockdown()) then
-      if frame.Hide then frame:Hide() end
-    end
-    return
-  else
-    if not (InCombatLockdown and InCombatLockdown()) then
-      if frame.Show then frame:Show() end
-    end
+  -- Always show; availability filtering (below max level) is handled in GetActiveCurrencyEntries
+  if not (InCombatLockdown and InCombatLockdown()) then
+    if frame.Show then frame:Show() end
   end
+
   -- Title
   frame.title:SetText(((cfg and cfg.label) or "Currencies") .. ScopeTag())
 
