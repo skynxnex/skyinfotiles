@@ -2,7 +2,7 @@ local ADDON_NAME = ...
 local SkyInfoTiles = _G[ADDON_NAME]
 local UI = SkyInfoTiles.UI
 
--- Current season currencies
+-- Current season currencies (Midnight Season 2 / patch 12.1)
 -- Hardcoded list of active season currencies (by ID). Update this list each season.
 local CURRENCIES = {
   -- Warband transferable
@@ -15,33 +15,32 @@ local CURRENCIES = {
   { separator = true },
 
   -- Character-bound
-  { id = 3212, label = "Radiant Spark Dust" },
+  { id = 3509, label = "Tidal Spark Dust" },
   { id = 3377, label = "Unalloyed Abundance" },
   { id = 3310, label = "Coffer Key Shards" },
   { id = 3028, label = "Restored Coffer Key" },
-  { id = 3378, label = "Dawnlight Manaflux" },
+  { id = 3465, label = "Venomblight Manaflux" },
   { id = 3376, label = "Shard of Dundun" },
-  { id = 3400, label = "Uncontaminated Void Sample" },
+  { id = 3448, label = "Corrosive Coin" },
   { id = 3356, label = "Untainted Mana-Crystals" },
-  { id = 3418, label = "Nebulous Voidcore" },
+  { id = 3513, label = "Nebulous Voidcore" },
   { id = 3405, label = "Field Accolade" },
 
   -- Separator
   { separator = true },
 
-  -- Dawncrest PvP/Rating currencies (lowest to highest)
-  { id = 3347, label = "Myth Dawncrest" },
-  { id = 3345, label = "Hero Dawncrest" },
-  { id = 3343, label = "Champion Dawncrest" },
-  { id = 3341, label = "Veteran Dawncrest" },
-  { id = 3383, label = "Adventurer Dawncrest" },
+  -- Mistcrest upgrade currencies (highest to lowest)
+  { id = 3446, label = "Myth Mistcrest" },
+  { id = 3445, label = "Hero Mistcrest" },
+  { id = 3444, label = "Champion Mistcrest" },
+  { id = 3443, label = "Veteran Mistcrest" },
+  { id = 3442, label = "Adventurer Mistcrest" },
 
   -- Separator
   { separator = true },
 
   -- Bag Items
-  { itemID = 268552, label = "Ascendant Voidcore" },
-  { itemID = 268650, label = "Ascendant Voidshard" },
+  { itemID = 273000, label = "Corrosive Soul" },
   { itemID = 258556, label = "Thalassian Token of Merit" },
 }
 

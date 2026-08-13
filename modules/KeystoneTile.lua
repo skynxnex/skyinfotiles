@@ -52,15 +52,15 @@ end
 -- ======================== Preset mapping (non-1:1 names) ========================
 -- Include ID for immediate binding (locale-independent)
 local PRESET_TELEPORT_MAP = {
-  -- Midnight Season 1 dungeons (verified spell IDs from MythicDungeonPortals addon)
-  ["maisaracaverns"] = { id = 1254559, name = "Teleport: Maisara Caverns" },
-  ["magistersterrace"] = { id = 1254572, name = "Teleport: Magisters' Terrace" },
-  ["nexuspointxenas"] = { id = 1254563, name = "Teleport: Nexus-Point Xenas" },
-  ["windrunnerspire"] = { id = 1254400, name = "Teleport: Windrunner Spire" },
-  ["algetharacademy"] = { id = 393273, name = "Teleport: Algeth'ar Academy" },
-  ["seatofthetriumvirate"] = { id = 1254551, name = "Teleport: Seat of the Triumvirate" },
-  ["skyreach"] = { id = 159898, name = "Teleport: Skyreach" },
-  ["pitofsaron"] = { id = 1254555, name = "Teleport: Pit of Saron" },
+  -- Midnight Season 2 dungeons (spell IDs cross-checked against AlterEgo + MythicDungeonTools)
+  ["altaroffangs"] = { id = 1286812, name = "Teleport: Altar of Fangs" },
+  ["murderrow"] = { id = 1286809, name = "Teleport: Murder Row" },
+  ["denofnalorakk"] = { id = 1286807, name = "Teleport: Den of Nalorakk" },
+  ["theblindingvale"] = { id = 1286801, name = "Teleport: The Blinding Vale" },
+  ["voidscararena"] = { id = 1286804, name = "Teleport: Voidscar Arena" },
+  ["kingsrest"] = { id = 1286831, name = "Teleport: Kings' Rest" },
+  ["templeofsethraliss"] = { id = 1286828, name = "Teleport: Temple of Sethraliss" },
+  ["rubylifepools"] = { id = 393256, name = "Teleport: Ruby Life Pools" },
 
   -- Other dungeons
   ["prioryofthesacredflame"] = { id = 445444, name = "Path of the Light's Reverence" }, -- Priory

@@ -230,6 +230,10 @@ SkyInfoTiles/
 - **1.7.0**: Introduced profiles system, migrated legacy `SkyInfoTilesDB.tiles` → `profiles.Default.tiles`
 - **1.7.1**: Removed deprecated tiles (healthbox, petbox, targetbox, groupbuffs) with automatic cleanup
 - **1.8.2**: Renamed "season3" tile to "currencies" for season-agnostic naming
+- **2.6.0**: Midnight Season 2 (patch 12.1) data — new dungeon/teleport lists in `DungeonPortsTile.lua`
+  (`MIDNIGHT_S2_DUNGEONS`) and `KeystoneTile.lua` (`PRESET_TELEPORT_MAP`), Mistcrest currencies in
+  `CurrencyTile.lua`, TOC bumped to `120100`. No SavedVariables migration: stale `currencySettings`
+  and `teleportMap` keys from S1 are inert (new IDs default to enabled)
 - Migration flags: `_migrated_171_removeDeprecatedTiles`, `_migrated_182_season3ToCurrencies`, `_helloShown`
 
 Always run migrations in `PLAYER_LOGIN` event handler before `Rebuild()`.

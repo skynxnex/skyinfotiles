@@ -31,17 +31,17 @@ end
 -- This avoids hardcoding dungeon lists per season.
 
 -- Override pool (used when client APIs still point at an older season).
--- Source: MythicDungeonPortals addon (Midnight Season 1 Keystone Hero teleports).
--- Verified spell IDs for all 8 dungeons.
-local MIDNIGHT_S1_DUNGEONS = {
-  { name = "Maisara Caverns",          spellName = "Teleport: Maisara Caverns",          spellID = 1254559 },
-  { name = "Magisters' Terrace",       spellName = "Teleport: Magisters' Terrace",       spellID = 1254572 },
-  { name = "Nexus-Point Xenas",        spellName = "Teleport: Nexus-Point Xenas",        spellID = 1254563 },
-  { name = "Windrunner Spire",         spellName = "Teleport: Windrunner Spire",         spellID = 1254400 },
-  { name = "Algeth'ar Academy",        spellName = "Teleport: Algeth'ar Academy",        spellID = 393273 },
-  { name = "Seat of the Triumvirate",  spellName = "Teleport: Seat of the Triumvirate",  spellID = 1254551 },
-  { name = "Skyreach",                 spellName = "Teleport: Skyreach",                 spellID = 159898 },
-  { name = "Pit of Saron",             spellName = "Teleport: Pit of Saron",             spellID = 1254555 },
+-- Midnight Season 2 (patch 12.1) Keystone Hero teleports.
+-- Spell IDs cross-checked against AlterEgo (Data/MythicPlus.lua) and MythicDungeonTools.
+local MIDNIGHT_S2_DUNGEONS = {
+  { name = "Altar of Fangs",           spellName = "Teleport: Altar of Fangs",           spellID = 1286812 },
+  { name = "Murder Row",               spellName = "Teleport: Murder Row",               spellID = 1286809 },
+  { name = "Den of Nalorakk",          spellName = "Teleport: Den of Nalorakk",          spellID = 1286807 },
+  { name = "The Blinding Vale",        spellName = "Teleport: The Blinding Vale",        spellID = 1286801 },
+  { name = "Voidscar Arena",           spellName = "Teleport: Voidscar Arena",           spellID = 1286804 },
+  { name = "Kings' Rest",              spellName = "Teleport: Kings' Rest",              spellID = 1286831 },
+  { name = "Temple of Sethraliss",     spellName = "Teleport: Temple of Sethraliss",     spellID = 1286828 },
+  { name = "Ruby Life Pools",          spellName = "Teleport: Ruby Life Pools",          spellID = 393256 },
 }
 
 -- ======================== Help: print commands (easy copy) ========================
@@ -187,9 +187,9 @@ end
 local function GetSeasonDungeons()
   local out = {}
 
-  -- Only the current season is interesting: use the Midnight S1 list.
+  -- Only the current season is interesting: use the Midnight S2 list.
   -- (Client APIs can lag and still point at older seasons.)
-  for _, rec in ipairs(MIDNIGHT_S1_DUNGEONS) do
+  for _, rec in ipairs(MIDNIGHT_S2_DUNGEONS) do
     local spellID = rec.spellID
     local spellName = rec.spellName
 
@@ -217,8 +217,8 @@ end
 -- This helps verify/collect correct portal IDs without relying on external sources.
 function SkyInfoTiles.DebugDungeonPortIDs()
   if not DEFAULT_CHAT_FRAME then return end
-  DEFAULT_CHAT_FRAME:AddMessage("|cff66ccffSkyInfoTiles:|r === DungeonPorts IDs (Midnight S1) ===")
-  for _, rec in ipairs(MIDNIGHT_S1_DUNGEONS or {}) do
+  DEFAULT_CHAT_FRAME:AddMessage("|cff66ccffSkyInfoTiles:|r === DungeonPorts IDs (Midnight S2) ===")
+  for _, rec in ipairs(MIDNIGHT_S2_DUNGEONS or {}) do
     local sid = rec.spellID
     local sidFromName = rec.spellName and GetSpellIDFromName(rec.spellName) or nil
     if sidFromName and sid and sidFromName ~= sid then
@@ -273,7 +273,7 @@ function SkyInfoTiles.FindDungeonPortSpellIDs()
 
   -- Targets: entries with a spellName but missing spellID.
   local targets = {}
-  for _, rec in ipairs(MIDNIGHT_S1_DUNGEONS or {}) do
+  for _, rec in ipairs(MIDNIGHT_S2_DUNGEONS or {}) do
     if rec and rec.spellName and not rec.spellID then
       targets[#targets + 1] = rec
     end
@@ -288,7 +288,8 @@ function SkyInfoTiles.FindDungeonPortSpellIDs()
 
   local ranges = {
     { from = 444000,  to = 446500 },   -- older Path/Teleport spells (observed ~445xxx)
-    { from = 1240000, to = 1265000 },  -- newer spells (observed Pit of Saron ~1254xxx)
+    { from = 1240000, to = 1265000 },  -- Midnight S1 spells (observed Pit of Saron ~1254xxx)
+    { from = 1280000, to = 1292000 },  -- Midnight S2 spells (observed Altar of Fangs ~1286xxx)
   }
 
   local rIdx = 1
