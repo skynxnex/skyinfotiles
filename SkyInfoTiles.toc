@@ -19,3 +19,4 @@ modules\CrosshairTile.lua
 modules\ClockTile.lua
 modules\BuffTrackerTile.lua
 modules\InfoBarTile.lua
+modules\ManaWarningTile.lua

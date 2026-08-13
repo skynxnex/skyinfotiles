@@ -17,6 +17,7 @@ local CATALOG = {
   { key = "dungeonports", type = "dungeonports", label = "Dungeon Teleports", defaultEnabled = false },
   { key = "bufftracker", type = "bufftracker", label = "Buff Tracker",      defaultEnabled = false, x = 800, y = -400 },
   { key = "infobar",    type = "infobar",    label = "Info Bar",            defaultEnabled = false },
+  { key = "manawarning", type = "manawarning", label = "Mana Warning",      defaultEnabled = false },
 }
 SkyInfoTiles.CATALOG = CATALOG -- used by Options.lua
 
@@ -726,6 +727,11 @@ function SkyInfoTiles.Rebuild()
     return
   end
   for i, f in ipairs(tilesFrames) do
+    -- DEFENSIVE: explicitly hide and clear unlock indicator BEFORE Destroy to prevent orphaned indicators
+    if f and f._unlockIndicator then
+      if f._unlockIndicator.Hide then pcall(f._unlockIndicator.Hide, f._unlockIndicator) end
+      f._unlockIndicator = nil
+    end
     if f and f.Destroy then pcall(f.Destroy, f) end
     if f and f.Hide and not InLockdown() then pcall(f.Hide, f) end
     tilesFrames[i] = nil

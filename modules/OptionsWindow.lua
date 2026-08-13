@@ -710,7 +710,7 @@ local function CreateOptionsWindow()
 
   -- Create all sidebar buttons
   local tabNames = {"General", "Currencies", "Keystone", "Char Stats", "Crosshair", "Clock", "Portals",
-    "BuffTracker", "InfoBar", "Profiles"}
+    "BuffTracker", "InfoBar", "Profiles", "Mana Warning"}
   local yOffset = -120  -- Further down below horizontal line
   for i, name in ipairs(tabNames) do
     local btn = CreateSidebarButton(name, i, yOffset)
@@ -3662,6 +3662,207 @@ CreateOptionsWindow_Part2 = function(contentArea, tabContent, f, tabs)
 
   -- === TAB 9: INFOBAR ===
   CreateInfoBarTab(contentArea, tabContent)
+
+  -- === TAB 11: MANA WARNING (font, size, threshold) ===
+  local manaTab, manaYOffset = CreateStandardTab(contentArea, tabContent, 11, "manawarning", "Mana Warning", "Show a warning when your healer mana is low")
+
+  local scrollFrame = CreateFrame("ScrollFrame", nil, manaTab, "UIPanelScrollFrameTemplate")
+  scrollFrame:SetPoint("TOPLEFT", 5, manaYOffset)
+  scrollFrame:SetPoint("BOTTOMRIGHT", -25, 10)
+
+  local scrollChild = CreateFrame("Frame", nil, scrollFrame)
+  scrollChild:SetSize(580, 800)
+  scrollFrame:SetScrollChild(scrollChild)
+
+  manaTab.scrollFrame = scrollFrame
+  manaTab.scrollChild = scrollChild
+
+  local yOffsetMana = -10
+  local manaPosSliders = CreatePositionSliders(scrollChild, "manawarning", "manawarning", yOffsetMana)
+  manaTab.xPosSlider = manaPosSliders.xPosSlider
+  manaTab.xPosEditBox = manaPosSliders.xPosEditBox
+  manaTab.yPosSlider = manaPosSliders.yPosSlider
+  manaTab.yPosEditBox = manaPosSliders.yPosEditBox
+  yOffsetMana = manaPosSliders.newYOffset
+
+  local strataValues = {
+    BACKGROUND = "BACKGROUND", LOW = "LOW", MEDIUM = "MEDIUM", HIGH = "HIGH",
+    DIALOG = "DIALOG", FULLSCREEN = "FULLSCREEN", FULLSCREEN_DIALOG = "FULLSCREEN_DIALOG", TOOLTIP = "TOOLTIP"
+  }
+  local strataOrder = { "BACKGROUND", "LOW", "MEDIUM", "HIGH", "DIALOG", "FULLSCREEN", "FULLSCREEN_DIALOG", "TOOLTIP" }
+
+  local strataRow, strataHeight, strataDropdown = W:CreateDropdown(scrollChild, yOffsetMana, "Frame Strata",
+    strataValues, strataOrder,
+    function()
+      local tiles = SkyInfoTiles.GetActiveTiles()
+      for _, tile in ipairs(tiles) do
+        if tile.key == "manawarning" or tile.type == "manawarning" then
+          return tile.strata or "MEDIUM"
+        end
+      end
+      return "MEDIUM"
+    end,
+    function(value)
+      local tiles = SkyInfoTiles.GetActiveTiles()
+      for _, tile in ipairs(tiles) do
+        if tile.key == "manawarning" or tile.type == "manawarning" then
+          tile.strata = value
+          if SkyInfoTiles.Rebuild then SkyInfoTiles.Rebuild() end
+          if SkyInfoTiles.UpdateAll then SkyInfoTiles.UpdateAll() end
+          break
+        end
+      end
+    end,
+    "Set the frame strata (layer) for the mana warning"
+  )
+  manaTab.strataDropdown = strataDropdown
+  yOffsetMana = yOffsetMana - strataHeight - 10
+
+  local function DiscoverFonts()
+    if SkyInfoTiles.Utils and SkyInfoTiles.Utils.DiscoverFonts then
+      return SkyInfoTiles.Utils.DiscoverFonts()
+    end
+    return {
+      { path = "Fonts\\FRIZQT__.ttf", name = "Friz Quadrata (Default)" },
+      { path = "Fonts\\ARIALN.ttf", name = "Arial Narrow" },
+      { path = "Fonts\\MORPHEUS.ttf", name = "Morpheus" },
+      { path = "Fonts\\skurri.ttf", name = "Skurri" },
+      { path = "Fonts\\theboldfont.ttf", name = "Bold Font" },
+    }
+  end
+
+  local fonts = DiscoverFonts()
+  local fontValues = {}
+  local fontOrder = {}
+  for _, fontInfo in ipairs(fonts) do
+    fontValues[fontInfo.path] = fontInfo.name
+    table.insert(fontOrder, fontInfo.path)
+  end
+
+  local fontRow, fontHeight, fontDropdown = W:CreateDropdown(scrollChild, yOffsetMana, "Font",
+    fontValues, fontOrder,
+    function()
+      local tiles = SkyInfoTiles.GetActiveTiles()
+      for _, tile in ipairs(tiles) do
+        if tile.key == "manawarning" or tile.type == "manawarning" then
+          return tile.font or "Fonts\\FRIZQT__.ttf"
+        end
+      end
+      return "Fonts\\FRIZQT__.ttf"
+    end,
+    function(value)
+      if SkyInfoTiles.GetActiveTiles then
+        local tiles = SkyInfoTiles.GetActiveTiles()
+        for _, tile in ipairs(tiles) do
+          if tile.key == "manawarning" or tile.type == "manawarning" then
+            tile.font = value
+            if SkyInfoTiles.Rebuild and SkyInfoTiles.UpdateAll then
+              SkyInfoTiles.Rebuild(); SkyInfoTiles.UpdateAll()
+            end
+            break
+          end
+        end
+      end
+    end,
+    "Choose the font for the mana warning display"
+  )
+  manaTab.fontDropdown = fontDropdown
+  manaTab.GetFontOptions = DiscoverFonts
+  yOffsetMana = yOffsetMana - fontHeight - 10
+
+  local sizeRow, sizeHeightUsed, sizeSliderRef = W:CreateSlider(scrollChild, yOffsetMana, "Font Size", 8, 48, 1,
+    function()
+      if SkyInfoTiles.GetActiveTiles then
+        local tiles = SkyInfoTiles.GetActiveTiles()
+        for _, tile in ipairs(tiles) do
+          if tile.key == "manawarning" or tile.type == "manawarning" then
+            return tile.fontSize or 28
+          end
+        end
+      end
+      return 28
+    end,
+    function(val)
+      if SkyInfoTiles.GetActiveTiles then
+        local tiles = SkyInfoTiles.GetActiveTiles()
+        for _, tile in ipairs(tiles) do
+          if tile.key == "manawarning" or tile.type == "manawarning" then
+            tile.fontSize = val
+            if SkyInfoTiles.Rebuild and SkyInfoTiles.UpdateAll then
+              SkyInfoTiles.Rebuild(); SkyInfoTiles.UpdateAll()
+            end
+            break
+          end
+        end
+      end
+    end,
+    "Font size for mana warning display (8-48)"
+  )
+  yOffsetMana = yOffsetMana - sizeHeightUsed - 10
+  manaTab.sizeSlider = sizeSliderRef
+
+  local threshRow, threshHeightUsed, threshSliderRef = W:CreateSlider(scrollChild, yOffsetMana, "Mana Threshold %", 5, 50, 1,
+    function()
+      if SkyInfoTiles.GetActiveTiles then
+        local tiles = SkyInfoTiles.GetActiveTiles()
+        for _, tile in ipairs(tiles) do
+          if tile.key == "manawarning" or tile.type == "manawarning" then
+            return tile.threshold or 20
+          end
+        end
+      end
+      return 20
+    end,
+    function(val)
+      if SkyInfoTiles.GetActiveTiles then
+        local tiles = SkyInfoTiles.GetActiveTiles()
+        for _, tile in ipairs(tiles) do
+          if tile.key == "manawarning" or tile.type == "manawarning" then
+            tile.threshold = val
+            if SkyInfoTiles.Rebuild and SkyInfoTiles.UpdateAll then
+              SkyInfoTiles.Rebuild(); SkyInfoTiles.UpdateAll()
+            end
+            break
+          end
+        end
+      end
+    end,
+    "Show the warning when healer mana drops below this percent (5-50)"
+  )
+  yOffsetMana = yOffsetMana - threshHeightUsed - 10
+  manaTab.thresholdSlider = threshSliderRef
+
+  local previewRow, previewHeightUsed = W:CreateToggle(scrollChild, yOffsetMana, "Preview (always show text)",
+    function()
+      if SkyInfoTiles.GetActiveTiles then
+        local tiles = SkyInfoTiles.GetActiveTiles()
+        for _, tile in ipairs(tiles) do
+          if tile.key == "manawarning" or tile.type == "manawarning" then
+            return tile.preview and true or false
+          end
+        end
+      end
+      return false
+    end,
+    function(val)
+      if SkyInfoTiles.GetActiveTiles then
+        local tiles = SkyInfoTiles.GetActiveTiles()
+        for _, tile in ipairs(tiles) do
+          if tile.key == "manawarning" or tile.type == "manawarning" then
+            tile.preview = val and true or false
+            if SkyInfoTiles.Rebuild and SkyInfoTiles.UpdateAll then
+              SkyInfoTiles.Rebuild(); SkyInfoTiles.UpdateAll()
+            end
+            break
+          end
+        end
+      end
+    end,
+    "Always show the \"Low mana\" text so you can position the tile (ignores healer/mana check)"
+  )
+  yOffsetMana = yOffsetMana - previewHeightUsed - 10
+  manaTab.previewToggle = previewRow
+
   local profilesTab = CreateFrame("Frame", nil, contentArea)
   profilesTab:SetAllPoints()
   profilesTab:Hide()
@@ -3862,7 +4063,8 @@ local function RefreshOptionsWindow()
     [6] = "clock",
     [7] = "dungeonports",
     [8] = "bufftracker",
-    [9] = "infobar"
+    [9] = "infobar",
+    [11] = "manawarning"
   }
 
   for tabIndex, tileKey in pairs(tileKeys) do
@@ -3971,7 +4173,8 @@ local function RefreshOptionsWindow()
     {index = 4, key = "charstats"},
     {index = 6, key = "clock"},
     {index = 7, key = "dungeonports"},
-    {index = 9, key = "infobar"}
+    {index = 9, key = "infobar"},
+    {index = 11, key = "manawarning"}
   }
 
   for _, tileInfo in ipairs(tilesWithPosition) do
@@ -4020,7 +4223,8 @@ local function RefreshOptionsWindow()
     {index = 5, key = "crosshair"},
     {index = 6, key = "clock"},
     {index = 7, key = "dungeonports"},
-    {index = 9, key = "infobar"}
+    {index = 9, key = "infobar"},
+    {index = 11, key = "manawarning"}
   }
 
   for _, tileInfo in ipairs(tilesWithStrata) do
