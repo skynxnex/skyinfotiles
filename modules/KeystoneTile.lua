@@ -239,31 +239,22 @@ local teleportCache -- { {id, nameNorm, descNorm, rawName} , ... }
 
 local function BuildTeleportCache()
   teleportCache = {}
-  if not (GetNumSpellTabs and GetSpellTabInfo and GetSpellBookItemInfo) then return end
-  local tabs = GetNumSpellTabs() or 0
-  for t = 1, tabs do
-    local _, _, ofs, num = GetSpellTabInfo(t)
-    ofs, num = ofs or 0, num or 0
-    for slot = ofs + 1, ofs + num do
-      local typ, spellID = GetSpellBookItemInfo(slot, "spell")
-      if typ == "SPELL" and spellID then
-        local si = (C_Spell and C_Spell.GetSpellInfo and C_Spell.GetSpellInfo(spellID)) or nil
-        local nm = si and si.name or nil
-        if type(nm) == "string" and nm ~= "" then
-          local desc = (C_Spell and C_Spell.GetSpellDescription and C_Spell.GetSpellDescription(spellID))
-                    or (GetSpellDescription and GetSpellDescription(spellID))
-                    or (si and si.description)
-                    or ""
-          table.insert(teleportCache, {
-            id       = spellID,
-            rawName  = nm,
-            nameNorm = Norm(nm),
-            descNorm = Norm(desc),
-          })
-        end
-      end
+  Utils.ForEachSpellBookSpell(function(spellID, bookName)
+    local si = (C_Spell and C_Spell.GetSpellInfo and C_Spell.GetSpellInfo(spellID)) or nil
+    local nm = (si and si.name) or bookName
+    if type(nm) == "string" and nm ~= "" then
+      local desc = (C_Spell and C_Spell.GetSpellDescription and C_Spell.GetSpellDescription(spellID))
+                or (GetSpellDescription and GetSpellDescription(spellID))
+                or (si and si.description)
+                or ""
+      table.insert(teleportCache, {
+        id       = spellID,
+        rawName  = nm,
+        nameNorm = Norm(nm),
+        descNorm = Norm(desc),
+      })
     end
-  end
+  end)
 end
 
 local function ResolveTeleportForDungeon(dungeonName)
@@ -274,13 +265,13 @@ local function ResolveTeleportForDungeon(dungeonName)
   local map = LoadTeleportMap(dungeonName) or PRESET_TELEPORT_MAP[key]
   if map then
     -- if ID present, verify known then use its localized name
-    if map.id and (IsPlayerSpell and IsPlayerSpell(map.id) or IsSpellKnown and IsSpellKnown(map.id)) then
+    if map.id and Utils.IsSpellAvailable(map.id) then
       local si = (C_Spell and C_Spell.GetSpellInfo and C_Spell.GetSpellInfo(map.id))
       return map.id, (si and si.name) or map.name
     end
     if map.name and C_Spell and C_Spell.GetSpellInfo then
       local si = C_Spell.GetSpellInfo(map.name)
-      if si and si.spellID and (IsPlayerSpell(si.spellID) or IsSpellKnown(si.spellID)) then
+      if si and si.spellID and Utils.IsSpellAvailable(si.spellID) then
         return si.spellID, si.name
       end
     end
@@ -371,7 +362,7 @@ function SkyInfoTiles.DebugKeystoneTeleport()
   if rid then
     local rlocal = (C_Spell and C_Spell.GetSpellInfo and C_Spell.GetSpellInfo(rid))
     Chat(("[RESOLVED] id=%d  name=%s (localized=%s) known=%s")
-      :format(rid, rname or "", rlocal and rlocal.name or "?", tostring(IsPlayerSpell and IsPlayerSpell(rid))))
+      :format(rid, rname or "", rlocal and rlocal.name or "?", tostring(Utils.IsSpellAvailable(rid))))
   else
     Chat("[RESOLVED] No teleport found.")
   end

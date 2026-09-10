@@ -102,31 +102,22 @@ end
 local teleportCache -- { {id, nameNorm, descNorm, rawName} , ... }
 local function BuildTeleportCache()
   teleportCache = {}
-  if not (GetNumSpellTabs and GetSpellTabInfo and GetSpellBookItemInfo) then return end
-  local tabs = GetNumSpellTabs() or 0
-  for t = 1, tabs do
-    local _, _, ofs, num = GetSpellTabInfo(t)
-    ofs, num = ofs or 0, num or 0
-    for slot = ofs + 1, ofs + num do
-      local typ, spellID = GetSpellBookItemInfo(slot, "spell")
-      if typ == "SPELL" and spellID then
-        local si = GetSpellInfoCached(spellID)
-        local nm = si and si.name or nil
-        if type(nm) == "string" and nm ~= "" then
-          local desc = (C_Spell and C_Spell.GetSpellDescription and C_Spell.GetSpellDescription(spellID))
-                    or (GetSpellDescription and GetSpellDescription(spellID))
-                    or (si and si.description)
-                    or ""
-          teleportCache[#teleportCache + 1] = {
-            id       = spellID,
-            rawName  = nm,
-            nameNorm = Norm(nm),
-            descNorm = Norm(desc),
-          }
-        end
-      end
+  Utils.ForEachSpellBookSpell(function(spellID, bookName)
+    local si = GetSpellInfoCached(spellID)
+    local nm = (si and si.name) or bookName
+    if type(nm) == "string" and nm ~= "" then
+      local desc = (C_Spell and C_Spell.GetSpellDescription and C_Spell.GetSpellDescription(spellID))
+                or (GetSpellDescription and GetSpellDescription(spellID))
+                or (si and si.description)
+                or ""
+      teleportCache[#teleportCache + 1] = {
+        id       = spellID,
+        rawName  = nm,
+        nameNorm = Norm(nm),
+        descNorm = Norm(desc),
+      }
     end
-  end
+  end)
 end
 
 local function ResolveTeleportForDungeon(dungeonName)
@@ -135,13 +126,13 @@ local function ResolveTeleportForDungeon(dungeonName)
   -- 0) DB map
   local db = LoadTeleportMap(dungeonName)
   if db then
-    if db.id and (IsPlayerSpell and IsPlayerSpell(db.id) or IsSpellKnown and IsSpellKnown(db.id)) then
+    if db.id and Utils.IsSpellAvailable(db.id) then
       local si = GetSpellInfoCached(db.id)
       return db.id, (si and si.name) or db.name
     end
     if db.name then
       local si = GetSpellInfoCached(db.name)
-      if si and si.spellID and (IsPlayerSpell(si.spellID) or IsSpellKnown(si.spellID)) then
+      if si and si.spellID and Utils.IsSpellAvailable(si.spellID) then
         return si.spellID, si.name
       end
     end
@@ -221,10 +212,21 @@ function SkyInfoTiles.DebugDungeonPortIDs()
   for _, rec in ipairs(MIDNIGHT_S2_DUNGEONS or {}) do
     local sid = rec.spellID
     local sidFromName = rec.spellName and GetSpellIDFromName(rec.spellName) or nil
+    -- Print each availability API separately: when a port isn't clickable on one
+    -- character but is on another, this line says which check disagrees.
+    local function Check(fn)
+      if type(fn) ~= "function" or not sid then return "n/a" end
+      local ok, res = pcall(function() return fn(sid) and true or false end)
+      return ok and tostring(res) or "error"
+    end
+    local inBook = Check(C_SpellBook and C_SpellBook.IsSpellKnownOrInSpellBook)
+    local legacy = Check(IsPlayerSpell)
+    local avail  = Utils.IsSpellAvailable(sid)
     if sidFromName and sid and sidFromName ~= sid then
       DEFAULT_CHAT_FRAME:AddMessage(string.format("|cffff5555%s|r  spellName='%s'  providedID=%s  resolvedID=%s (mismatch)", tostring(rec.name), tostring(rec.spellName), tostring(sid), tostring(sidFromName)))
     else
-      DEFAULT_CHAT_FRAME:AddMessage(string.format("%s  spellName='%s'  spellID=%s", tostring(rec.name), tostring(rec.spellName), tostring(sidFromName or sid)))
+      DEFAULT_CHAT_FRAME:AddMessage(string.format("%s  spellID=%s  available=%s (inSpellBook=%s, IsPlayerSpell=%s)",
+        tostring(rec.name), tostring(sidFromName or sid), tostring(avail), tostring(inBook), tostring(legacy)))
     end
   end
   DEFAULT_CHAT_FRAME:AddMessage("|cff66ccffSkyInfoTiles:|r Tip: copy the spellID values for any entries missing IDs.")
@@ -642,7 +644,16 @@ local function ResolveSpellKey(d)
     return (d._resolvedSpellID ~= false) and d._resolvedSpellID or nil
   end
 
-  -- 0) Prefer dynamic resolve from spellbook by dungeon name.
+  -- 0) The curated spellID wins whenever that spell is actually in the player's
+  -- spellbook. Token matching against spell descriptions is a guess and gets
+  -- persisted account-wide via SaveTeleportMap, so only reach for it when the
+  -- curated ID isn't available on this character.
+  if d.spellID and Utils.IsSpellAvailable(d.spellID) then
+    d._resolvedSpellID = d.spellID
+    return d.spellID
+  end
+
+  -- 1) Dynamic resolve from the spellbook by dungeon name.
   -- This is robust even if our hardcoded spellName strings drift/are wrong.
   if d.name then
     local rid, rname = ResolveTeleportForDungeon(d.name)
@@ -692,22 +703,16 @@ end
 local function IsTeleportKnown(d)
   if not d then return false, nil end
   local id = ResolveSpellKey(d) or GetSpellIDFromName(d.spellName)
-  local known = false
-  if id then
-    if IsSpellKnownOrOverridesKnown and IsSpellKnownOrOverridesKnown(id) then
-      known = true
-    elseif IsPlayerSpell and IsPlayerSpell(id) then
-      known = true
-    elseif IsSpellKnown and IsSpellKnown(id) then
-      known = true
-    end
-  end
+  local known = id and Utils.IsSpellAvailable(id) or false
+
   -- Fallback: if the client says it's usable, treat as known
   if not known then
     local key = id or d.spellName
-    if key and IsUsableSpell then
-      local usable = IsUsableSpell(key)
-      if usable then known = true end
+    local fn = (C_Spell and C_Spell.IsSpellUsable) or IsUsableSpell
+    if key and fn then
+      -- Coerce inside the pcall; the result may be a protected "secret" value.
+      local ok, usable = pcall(function() return fn(key) and true or false end)
+      if ok and usable == true then known = true end
     end
   end
   return known, id

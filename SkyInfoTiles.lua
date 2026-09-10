@@ -104,6 +104,81 @@ function SkyInfoTiles.Utils.TokensFromName(s)
   return tokens, SkyInfoTiles.Utils.NormKey(s)
 end
 
+-- === Shared spell availability / spellbook walking ===
+-- Dungeon teleports are account-wide: on a character that didn't earn the
+-- achievement itself they sit in the spellbook without being "known", so
+-- IsSpellKnown/IsPlayerSpell both answer false for them. C_SpellBook.IsSpellKnownOrInSpellBook
+-- is the check Blizzard's own UI uses for these; the legacy globals are kept
+-- only as a fallback for clients where C_SpellBook isn't there.
+function SkyInfoTiles.Utils.IsSpellAvailable(spellIDOrName)
+  if not spellIDOrName then return false end
+
+  local spellID = tonumber(spellIDOrName)
+  if not spellID and C_Spell and C_Spell.GetSpellInfo then
+    local ok, si = pcall(C_Spell.GetSpellInfo, spellIDOrName)
+    if ok and si then spellID = si.spellID end
+  end
+  if not spellID then return false end
+
+  -- Coerce inside the pcall: 12.0 can hand back protected "secret" values that
+  -- throw when you so much as test them for truthiness.
+  local function Try(fn, ...)
+    if type(fn) ~= "function" then return false end
+    local ok, res = pcall(function(...) return fn(...) and true or false end, ...)
+    return ok and res == true
+  end
+
+  local sb = C_SpellBook
+  if sb then
+    if Try(sb.IsSpellKnownOrInSpellBook, spellID) then return true end
+    if Try(sb.IsSpellInSpellBook, spellID) then return true end
+    if Try(sb.IsSpellKnown, spellID) then return true end
+  end
+  if Try(IsSpellKnownOrOverridesKnown, spellID) then return true end
+  if Try(IsPlayerSpell, spellID) then return true end
+  if Try(IsSpellKnown, spellID) then return true end
+  return false
+end
+
+-- Walk every spell in the player's spellbook, calling fn(spellID, name).
+-- Uses the 11.0+ skill-line API; GetNumSpellTabs/GetSpellBookItemInfo were removed.
+function SkyInfoTiles.Utils.ForEachSpellBookSpell(fn)
+  if type(fn) ~= "function" then return end
+
+  local sb = C_SpellBook
+  if sb and sb.GetNumSpellBookSkillLines and sb.GetSpellBookSkillLineInfo and sb.GetSpellBookItemInfo then
+    local bank = (Enum and Enum.SpellBookSpellBank and Enum.SpellBookSpellBank.Player) or 0
+    local spellType = (Enum and Enum.SpellBookItemType and Enum.SpellBookItemType.Spell) or nil
+    local numLines = sb.GetNumSpellBookSkillLines() or 0
+    for line = 1, numLines do
+      local li = sb.GetSpellBookSkillLineInfo(line)
+      -- offSpecID lines list the other spec's spells; those aren't castable.
+      if li and li.itemIndexOffset and li.numSpellBookItems and not li.offSpecID then
+        for i = li.itemIndexOffset + 1, li.itemIndexOffset + li.numSpellBookItems do
+          local info = sb.GetSpellBookItemInfo(i, bank)
+          if info and (spellType == nil or info.itemType == spellType) then
+            local id = info.spellID or info.actionID
+            if id then fn(id, info.name) end
+          end
+        end
+      end
+    end
+    return
+  end
+
+  -- Pre-11.0 clients
+  if GetNumSpellTabs and GetSpellTabInfo and GetSpellBookItemInfo then
+    for t = 1, (GetNumSpellTabs() or 0) do
+      local _, _, ofs, num = GetSpellTabInfo(t)
+      ofs, num = ofs or 0, num or 0
+      for slot = ofs + 1, ofs + num do
+        local typ, spellID = GetSpellBookItemInfo(slot, "spell")
+        if typ == "SPELL" and spellID then fn(spellID, nil) end
+      end
+    end
+  end
+end
+
 -- === Font Discovery (shared utility for all tiles) ===
 local DISCOVERED_FONTS = nil
 local fontsDiscovered = false
