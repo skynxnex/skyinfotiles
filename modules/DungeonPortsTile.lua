@@ -44,12 +44,27 @@ local MIDNIGHT_S2_DUNGEONS = {
   { name = "Ruby Life Pools",          spellName = "Teleport: Ruby Life Pools",          spellID = 393256 },
 }
 
+-- Midnight Season 1 (patch 12.0) teleports. Not shown in the tile, but kept so
+-- ownership diagnostics can tell "this character earned nothing yet" apart from
+-- "this character earned last season's ports". Skyreach has two IDs.
+local MIDNIGHT_S1_DUNGEONS = {
+  { name = "Pit of Saron",              spellIDs = { 1254555 } },
+  { name = "Skyreach",                  spellIDs = { 159898, 1254557 } },
+  { name = "Seat of the Triumvirate",   spellIDs = { 1254551 } },
+  { name = "Algeth'ar Academy",         spellIDs = { 393273 } },
+  { name = "Windrunner Spire",          spellIDs = { 1254400 } },
+  { name = "Magister's Terrace",        spellIDs = { 1254572 } },
+  { name = "Maisara Caverns",           spellIDs = { 1254559 } },
+  { name = "Nexus-Point Xenas",         spellIDs = { 1254563 } },
+}
+
 -- ======================== Help: print commands (easy copy) ========================
 SLASH_SKYPORTSHELP1 = "/skyportshelp"
 SlashCmdList["SKYPORTSHELP"] = function()
   if not DEFAULT_CHAT_FRAME then return end
   DEFAULT_CHAT_FRAME:AddMessage("|cff66ccffSkyInfoTiles:|r === SkyInfoTiles dungeon ports debug commands ===")
   DEFAULT_CHAT_FRAME:AddMessage("/skyportsdebug   - print current port entries + resolved spellIDs")
+  DEFAULT_CHAT_FRAME:AddMessage("/skyportsknown   - list every teleport this character actually owns")
   DEFAULT_CHAT_FRAME:AddMessage("/skyportssearch <text> - scan spell names in likely ranges (substring match)")
   DEFAULT_CHAT_FRAME:AddMessage("/skyportsdesc <text>   - scan spell descriptions in likely ranges (substring match)")
   DEFAULT_CHAT_FRAME:AddMessage("/skyportsfind    - try to auto-match missing IDs (name-based; may not work)")
@@ -156,20 +171,21 @@ local function ResolveTeleportForDungeon(dungeonName)
     end
   end
 
-  -- 3) Fallback: name contains at least one token (looser)
-  local bestID, bestName, bestScore = nil, nil, 0
-  for _, rec in ipairs(teleportCache) do
-    local score = 0
-    for _, tk in ipairs(tokens) do
-      if rec.nameNorm:find(tk, 1, true) then score = score + 1 end
+  -- 3) Fallback: every token must appear in the spell name. A single shared
+  -- token is not evidence - "The Blinding Vale" would happily match the paladin
+  -- ability Blinding Light - and the result gets written to teleportMap, so a
+  -- wrong guess here outlives the session.
+  if #tokens > 0 then
+    for _, rec in ipairs(teleportCache) do
+      local okAll = true
+      for _, tk in ipairs(tokens) do
+        if not rec.nameNorm:find(tk, 1, true) then okAll = false; break end
+      end
+      if okAll then
+        SaveTeleportMap(dungeonName, rec.id, rec.rawName)
+        return rec.id, rec.rawName
+      end
     end
-    if score > bestScore then
-      bestScore, bestID, bestName = score, rec.id, rec.rawName
-    end
-  end
-  if bestScore > 0 then
-    SaveTeleportMap(dungeonName, bestID, bestName)
-    return bestID, bestName
   end
 
   return nil, nil
@@ -236,6 +252,63 @@ SLASH_SKYPORTSDEBUG1 = "/skyportsdebug"
 SlashCmdList["SKYPORTSDEBUG"] = function()
   if SkyInfoTiles and SkyInfoTiles.DebugDungeonPortIDs then
     SkyInfoTiles.DebugDungeonPortIDs()
+  end
+end
+
+-- ======================== Debug: list the teleports this character owns ========================
+-- Answers "does this character have any dungeon teleports at all", independent
+-- of our hardcoded season list. If a port works in game but isn't listed by
+-- /skyportsdebug, its spellID belongs here and not in MIDNIGHT_S2_DUNGEONS.
+function SkyInfoTiles.DebugKnownTeleports()
+  if not DEFAULT_CHAT_FRAME then return end
+  DEFAULT_CHAT_FRAME:AddMessage("|cff66ccffSkyInfoTiles:|r === Teleports in this character's spellbook ===")
+
+  -- Teleports do not appear in the spellbook's skill lines (verified: a port
+  -- reporting IsSpellKnownOrInSpellBook=true is absent from every line), and
+  -- C_Spell.GetSpellInfo(<name>) does not resolve names here. Per-ID ownership
+  -- is the only signal that answers truthfully.
+  if InCombatLockdown and InCombatLockdown() then
+    DEFAULT_CHAT_FRAME:AddMessage("|cffff5555Run this out of combat - castability reads false for everything in combat.|r")
+  end
+
+  local owned = 0
+  local function Report(label, ids)
+    local hit, viaSpellBook = nil, false
+    for _, id in ipairs(ids) do
+      local usable = false
+      local fn = (C_Spell and C_Spell.IsSpellUsable) or IsUsableSpell
+      if fn then
+        local ok, res = pcall(function() return fn(id) and true or false end)
+        usable = ok and res == true
+      end
+      if usable or Utils.IsSpellAvailable(id) then
+        hit, viaSpellBook = id, Utils.IsSpellAvailable(id)
+        break
+      end
+    end
+    if hit then owned = owned + 1 end
+    DEFAULT_CHAT_FRAME:AddMessage(string.format("  %s %s (%s)",
+      hit and "|cff44ff44USABLE|r" or "|cff888888   --   |r", label,
+      hit and ("spellID=" .. hit .. (viaSpellBook and ", in spellbook" or ", warband")) or table.concat(ids, "/")))
+  end
+
+  DEFAULT_CHAT_FRAME:AddMessage("|cff66ccffSkyInfoTiles:|r --- current season (shown in the tile) ---")
+  for _, rec in ipairs(MIDNIGHT_S2_DUNGEONS or {}) do
+    Report(rec.name, { rec.spellID })
+  end
+
+  DEFAULT_CHAT_FRAME:AddMessage("|cff66ccffSkyInfoTiles:|r --- previous season (not shown) ---")
+  for _, rec in ipairs(MIDNIGHT_S1_DUNGEONS or {}) do
+    Report(rec.name, rec.spellIDs)
+  end
+
+  DEFAULT_CHAT_FRAME:AddMessage(string.format("|cff66ccffSkyInfoTiles:|r %d teleport(s) owned in total.", owned))
+end
+
+SLASH_SKYPORTSKNOWN1 = "/skyportsknown"
+SlashCmdList["SKYPORTSKNOWN"] = function()
+  if SkyInfoTiles and SkyInfoTiles.DebugKnownTeleports then
+    SkyInfoTiles.DebugKnownTeleports()
   end
 end
 
@@ -644,16 +717,16 @@ local function ResolveSpellKey(d)
     return (d._resolvedSpellID ~= false) and d._resolvedSpellID or nil
   end
 
-  -- 0) The curated spellID wins whenever that spell is actually in the player's
-  -- spellbook. Token matching against spell descriptions is a guess and gets
-  -- persisted account-wide via SaveTeleportMap, so only reach for it when the
-  -- curated ID isn't available on this character.
-  if d.spellID and Utils.IsSpellAvailable(d.spellID) then
+  -- 0) The curated spellID wins outright. Don't gate this on the spell being in
+  -- the spellbook: warband ports aren't, and falling through would send every
+  -- alt into the token-matching guesswork below - which persists its guess
+  -- account-wide through SaveTeleportMap.
+  if d.spellID then
     d._resolvedSpellID = d.spellID
     return d.spellID
   end
 
-  -- 1) Dynamic resolve from the spellbook by dungeon name.
+  -- 1) No curated ID: resolve dynamically from the spellbook by dungeon name.
   -- This is robust even if our hardcoded spellName strings drift/are wrong.
   if d.name then
     local rid, rname = ResolveTeleportForDungeon(d.name)
@@ -664,24 +737,9 @@ local function ResolveSpellKey(d)
     end
   end
 
-  -- Prefer resolving by name when available (more likely to be correct if an ID was guessed/incorrect).
-  local sidFromName = nil
-  if d.spellName then
-    sidFromName = GetSpellIDFromName(d.spellName)
-  end
-
-  -- If both exist but disagree, prefer the ID resolved from name.
-  if d.spellID and sidFromName and d.spellID ~= sidFromName then
-    d._resolvedSpellID = sidFromName
-    return sidFromName
-  end
-
-  -- Otherwise, keep provided ID if present.
-  if d.spellID then
-    d._resolvedSpellID = d.spellID
-    return d.spellID
-  end
-
+  -- 2) Last resort: resolve the hardcoded spell name. (d.spellID is nil here,
+  -- so there is no curated ID left to disagree with.)
+  local sidFromName = d.spellName and GetSpellIDFromName(d.spellName) or nil
   d._resolvedSpellID = sidFromName or false
   return sidFromName
 end
@@ -700,13 +758,26 @@ GetSpellIDFromName = function(name)
   return nil
 end
 
+-- Access is warband-wide, so "did this character learn it" is the wrong
+-- question: the spellbook checks answer false for a port the character can cast
+-- perfectly well. Castability is what actually decides whether the button will
+-- do something, so it is the primary signal here and the spellbook checks only
+-- catch the case where a port is owned but momentarily not castable.
+--
+-- The catch is that castability is also false whenever you cannot cast right
+-- now - in combat above all - so a positive answer is cached for the session
+-- and combat never gets to produce a negative one. Otherwise every pull would
+-- desaturate the icons and turn the borders red.
+local _ownedTeleports = {}
+
 local function IsTeleportKnown(d)
   if not d then return false, nil end
   local id = ResolveSpellKey(d) or GetSpellIDFromName(d.spellName)
+  if id and _ownedTeleports[id] then return true, id end
+
   local known = id and Utils.IsSpellAvailable(id) or false
 
-  -- Fallback: if the client says it's usable, treat as known
-  if not known then
+  if not known and not (InCombatLockdown and InCombatLockdown()) then
     local key = id or d.spellName
     local fn = (C_Spell and C_Spell.IsSpellUsable) or IsUsableSpell
     if key and fn then
@@ -715,6 +786,8 @@ local function IsTeleportKnown(d)
       if ok and usable == true then known = true end
     end
   end
+
+  if known and id then _ownedTeleports[id] = true end
   return known, id
 end
 

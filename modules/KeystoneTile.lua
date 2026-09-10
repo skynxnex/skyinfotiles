@@ -297,26 +297,16 @@ local function ResolveTeleportForDungeon(dungeonName)
     end
   end
 
-  -- 3) Fallback: name contains at least one token (looser)
-  local bestID, bestName, bestScore = nil, nil, 0
-  for _, rec in ipairs(teleportCache) do
-    local score = 0
-    for _, tk in ipairs(tokens) do
-      if rec.nameNorm:find(tk, 1, true) then score = score + 1 end
-    end
-    if score > bestScore then
-      bestScore, bestID, bestName = score, rec.id, rec.rawName
-    end
-  end
-  if bestScore > 0 then
-    SaveTeleportMap(dungeonName, bestID, bestName)
-    return bestID, bestName
-  end
-
-  -- 4) Last resort: description contains any token
-  for _, rec in ipairs(teleportCache) do
-    for _, tk in ipairs(tokens) do
-      if rec.descNorm:find(tk, 1, true) then
+  -- 3) Fallback: every token must appear in the spell name. Matching on a
+  -- single shared token picks up unrelated class abilities, and the result is
+  -- written to teleportMap, so a wrong guess here outlives the session.
+  if #tokens > 0 then
+    for _, rec in ipairs(teleportCache) do
+      local okAll = true
+      for _, tk in ipairs(tokens) do
+        if not rec.nameNorm:find(tk, 1, true) then okAll = false; break end
+      end
+      if okAll then
         SaveTeleportMap(dungeonName, rec.id, rec.rawName)
         return rec.id, rec.rawName
       end
