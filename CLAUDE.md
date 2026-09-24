@@ -234,6 +234,12 @@ SkyInfoTiles/
   (`MIDNIGHT_S2_DUNGEONS`) and `KeystoneTile.lua` (`PRESET_TELEPORT_MAP`), Mistcrest currencies in
   `CurrencyTile.lua`, TOC bumped to `120100`. No SavedVariables migration: stale `currencySettings`
   and `teleportMap` keys from S1 are inert (new IDs default to enabled)
+- **2.6.2**: Currency list audited against Season 2. Dropped Thalassian Token of Merit (tagged
+  "Midnight Season 1" in its tooltip); added Remnant of Anguish, Coiled Filament, Ossified Relic and
+  the S2 Trovehunter's Bounty. Section grouping in `CurrencyTile.lua` is no longer hardcoded via
+  `separator` entries — `BuildGroupedList()` partitions `CURRENCY_DEFS` at runtime using
+  `C_CurrencyInfo.GetCurrencyInfo().isAccountTransferable`, with `entry.warband` as a fallback only
+  while a currency is still undiscovered
 - Migration flags: `_migrated_171_removeDeprecatedTiles`, `_migrated_182_season3ToCurrencies`, `_helloShown`
 
 Always run migrations in `PLAYER_LOGIN` event handler before `Rebuild()`.

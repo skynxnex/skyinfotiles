@@ -3,49 +3,95 @@ local SkyInfoTiles = _G[ADDON_NAME]
 local UI = SkyInfoTiles.UI
 
 -- Current season currencies (Midnight Season 2 / patch 12.1)
--- Hardcoded list of active season currencies (by ID). Update this list each season.
-local CURRENCIES = {
-  -- Warband transferable
-  { id = 3379, label = "Brimming Arcana" },
-  { id = 3385, label = "Luminous Dust" },
-  { id = 3316, label = "Voidlight Marl" },
-  { id = 2803, label = "Undercoin" },
+-- Static currency definitions. Grouping is derived at runtime from C_CurrencyInfo.
+local CURRENCY_DEFS = {
+  { id = 3379, label = "Brimming Arcana", warband = true },
+  { id = 3385, label = "Luminous Dust", warband = true },
+  { id = 3316, label = "Voidlight Marl", warband = true },
+  { id = 2803, label = "Undercoin", warband = true },
 
-  -- Separator
-  { separator = true },
-
-  -- Character-bound
   { id = 3509, label = "Tidal Spark Dust" },
   { id = 3377, label = "Unalloyed Abundance" },
   { id = 3310, label = "Coffer Key Shards" },
   { id = 3028, label = "Restored Coffer Key" },
   { id = 3465, label = "Venomblight Manaflux" },
   { id = 3376, label = "Shard of Dundun" },
-  { id = 3448, label = "Corrosive Coin" },
   { id = 3356, label = "Untainted Mana-Crystals" },
   { id = 3418, label = "Nebulous Voidcore" },
   { id = 3405, label = "Field Accolade" },
 
-  -- Separator
-  { separator = true },
+  { id = 3448, label = "Corrosive Coin" },
+  { id = 3392, label = "Remnant of Anguish" },
+  { id = 3546, label = "Coiled Filament" },
 
-  -- Mistcrest upgrade currencies (highest to lowest)
-  { id = 3446, label = "Myth Mistcrest" },
-  { id = 3445, label = "Hero Mistcrest" },
-  { id = 3444, label = "Champion Mistcrest" },
-  { id = 3443, label = "Veteran Mistcrest" },
-  { id = 3442, label = "Adventurer Mistcrest" },
+  { id = 3446, label = "Myth Mistcrest", group = "crest" },
+  { id = 3445, label = "Hero Mistcrest", group = "crest" },
+  { id = 3444, label = "Champion Mistcrest", group = "crest" },
+  { id = 3443, label = "Veteran Mistcrest", group = "crest" },
+  { id = 3442, label = "Adventurer Mistcrest", group = "crest" },
 
-  -- Separator
-  { separator = true },
-
-  -- Bag Items
-  { itemID = 273000, label = "Corrosive Soul" },
-  { itemID = 258556, label = "Thalassian Token of Merit" },
+  { itemID = 273000, label = "Corrosive Soul", group = "item" },
+  { itemID = 274422, label = "Ossified Relic", group = "item" },
+  { itemID = 274374, label = "Trovehunter's Bounty", group = "item" },
 }
 
+-- Warband transfer state is read from the API so the grouping stays correct
+-- across seasons; entry.warband is only a fallback for undiscovered currencies.
+local transferCache = {}
+
+local function IsWarbandTransferable(entry)
+  if entry.group or not entry.id then return false end
+
+  local cached = transferCache[entry.id]
+  if cached ~= nil then return cached end
+
+  local ci = C_CurrencyInfo.GetCurrencyInfo(entry.id)
+  if ci then
+    local v = (ci.isAccountTransferable or ci.isAccountWide) and true or false
+    transferCache[entry.id] = v
+    return v
+  end
+
+  return entry.warband == true
+end
+
+local function BuildGroupedList()
+  local warband = {}
+  local charBound = {}
+  local crest = {}
+  local item = {}
+
+  for _, entry in ipairs(CURRENCY_DEFS) do
+    if entry.group == "crest" then
+      table.insert(crest, entry)
+    elseif entry.group == "item" then
+      table.insert(item, entry)
+    elseif IsWarbandTransferable(entry) then
+      table.insert(warband, entry)
+    else
+      table.insert(charBound, entry)
+    end
+  end
+
+  local result = {}
+  local buckets = {warband, charBound, crest, item}
+
+  for i, bucket in ipairs(buckets) do
+    if #bucket > 0 then
+      if #result > 0 then
+        table.insert(result, { separator = true })
+      end
+      for _, entry in ipairs(bucket) do
+        table.insert(result, entry)
+      end
+    end
+  end
+
+  return result
+end
+
 -- Export currency list for OptionsWindow
-SkyInfoTiles._currencyList = CURRENCIES
+SkyInfoTiles._currencyList = BuildGroupedList()
 
 -- Max level gate
 local function IsAtMaxLevel()
@@ -72,6 +118,10 @@ local function IsEntryAvailable(entry)
 end
 
 local function GetActiveCurrencyEntries()
+  -- Build grouped list and refresh export
+  local CURRENCIES = BuildGroupedList()
+  SkyInfoTiles._currencyList = CURRENCIES
+
   -- Filter based on user selection
   if not SkyInfoTilesDB or not SkyInfoTilesDB.currencySettings then
     return CURRENCIES -- Show all by default
@@ -494,14 +544,18 @@ SLASH_SKYCURRENCYDEBUG1 = "/skycurrencydebug"
 SlashCmdList["SKYCURRENCYDEBUG"] = function()
   if not DEFAULT_CHAT_FRAME then return end
   DEFAULT_CHAT_FRAME:AddMessage("|cff66ccffSkyInfoTiles Currency Debug:|r")
-  for _, entry in ipairs(CURRENCIES) do
-    if not entry.separator and entry.id then
+  for _, entry in ipairs(CURRENCY_DEFS) do
+    if entry.id then
       local ci = C_CurrencyInfo and C_CurrencyInfo.GetCurrencyInfo and C_CurrencyInfo.GetCurrencyInfo(entry.id)
+      local wb = IsWarbandTransferable(entry) and " [WARBAND]" or ""
       if ci then
-        DEFAULT_CHAT_FRAME:AddMessage(string.format("  [%d] %s: %d (discovered)", entry.id, entry.label, ci.quantity or 0))
+        DEFAULT_CHAT_FRAME:AddMessage(string.format("  [%d] %s: %d (discovered)%s", entry.id, entry.label, ci.quantity or 0, wb))
       else
-        DEFAULT_CHAT_FRAME:AddMessage(string.format("  [%d] %s: NOT DISCOVERED", entry.id, entry.label))
+        DEFAULT_CHAT_FRAME:AddMessage(string.format("  [%d] %s: NOT DISCOVERED%s", entry.id, entry.label, wb))
       end
+    elseif entry.itemID then
+      local count = C_Item.GetItemCount(entry.itemID, true) or 0
+      DEFAULT_CHAT_FRAME:AddMessage(string.format("  [item:%d] %s: %d", entry.itemID, entry.label, count))
     end
   end
 end
