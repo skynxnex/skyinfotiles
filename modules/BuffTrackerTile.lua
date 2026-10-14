@@ -90,6 +90,79 @@ end
 SkyInfoTiles.GetBuffTrackerList = GetBuffList
 SkyInfoTiles.SaveBuffTrackerList = SaveBuffList
 
+-- Defensive API wrappers for retail 12.x compatibility
+local function GetItemCooldownSafe(itemID)
+  -- Prefer C_Item.GetItemCooldown (retail 11.x+)
+  if C_Item and C_Item.GetItemCooldown then
+    local ok, start, duration, enable = pcall(C_Item.GetItemCooldown, itemID)
+    if ok and start then
+      return start, duration, enable
+    end
+  end
+
+  -- Fall back to C_Container.GetItemCooldown if present
+  if C_Container and C_Container.GetItemCooldown then
+    local ok, start, duration, enable = pcall(C_Container.GetItemCooldown, itemID)
+    if ok and start then
+      return start, duration, enable
+    end
+  end
+
+  -- Fall back to global GetItemCooldown (legacy)
+  if type(GetItemCooldown) == "function" then
+    local ok, start, duration, enable = pcall(GetItemCooldown, itemID)
+    if ok and start then
+      return start, duration, enable
+    end
+  end
+
+  -- Degrade gracefully: no cooldown
+  return 0, 0, true
+end
+
+local function GetInventoryItemIDSafe(unit, slotID)
+  -- Prefer C_Item.GetInventoryItemID (retail 11.x+)
+  if C_Item and C_Item.GetInventoryItemID then
+    return C_Item.GetInventoryItemID(unit, slotID)
+  end
+
+  -- Fall back to global GetInventoryItemID (legacy)
+  if type(GetInventoryItemID) == "function" then
+    return GetInventoryItemID(unit, slotID)
+  end
+
+  return nil
+end
+
+local function GetInventoryItemCooldownSafe(unit, slotID)
+  -- Prefer C_Container.GetInventoryItemCooldown (retail 11.x+)
+  if C_Container and C_Container.GetInventoryItemCooldown then
+    return C_Container.GetInventoryItemCooldown(unit, slotID)
+  end
+
+  -- Fall back to global GetInventoryItemCooldown (legacy)
+  if type(GetInventoryItemCooldown) == "function" then
+    return GetInventoryItemCooldown(unit, slotID)
+  end
+
+  -- Degrade gracefully: no cooldown
+  return 0, 0, true
+end
+
+local function GetInventoryItemTextureSafe(unit, slotID)
+  -- Prefer C_Item.GetInventoryItemTexture (retail 11.x+)
+  if C_Item and C_Item.GetInventoryItemTexture then
+    return C_Item.GetInventoryItemTexture(unit, slotID)
+  end
+
+  -- Fall back to global GetInventoryItemTexture (legacy)
+  if type(GetInventoryItemTexture) == "function" then
+    return GetInventoryItemTexture(unit, slotID)
+  end
+
+  return nil
+end
+
 local function GetBuffInfo(buffID)
   -- Try C_UnitAuras (modern API)
   if C_UnitAuras and C_UnitAuras.GetPlayerAuraBySpellID then
@@ -155,7 +228,7 @@ local function GetTrinketSlots()
 end
 
 local function GetTrinketInfo(slotID)
-  local itemID = GetInventoryItemID("player", slotID)
+  local itemID = GetInventoryItemIDSafe("player", slotID)
 
   if not itemID then
     return {
@@ -177,7 +250,7 @@ local function GetTrinketInfo(slotID)
   end
 
   -- Get cooldown info
-  local start, duration = GetInventoryItemCooldown("player", slotID)
+  local start, duration = GetInventoryItemCooldownSafe("player", slotID)
   local timeLeft = 0
   local active = false
 
@@ -189,7 +262,7 @@ local function GetTrinketInfo(slotID)
   end
 
   -- Get icon
-  local icon = GetInventoryItemTexture("player", slotID) or "Interface\\Icons\\INV_Misc_QuestionMark"
+  local icon = GetInventoryItemTextureSafe("player", slotID) or "Interface\\Icons\\INV_Misc_QuestionMark"
 
   return {
     icon = icon,
@@ -239,8 +312,8 @@ local function GetPotionInfo(itemID)
   -- Get item count
   local count = C_Item.GetItemCount(itemID) or 0
 
-  -- Get cooldown info using GetItemCooldown (global function)
-  local start, duration = GetItemCooldown(itemID)
+  -- Get cooldown info
+  local start, duration = GetItemCooldownSafe(itemID)
   local timeLeft = 0
   local active = false
 
