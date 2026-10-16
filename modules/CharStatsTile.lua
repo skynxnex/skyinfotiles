@@ -9,40 +9,82 @@ local PAD_Y      = 6
 local FONT_LINE  = "GameFontNormal"
 local FONT_HEAD  = "GameFontNormalLarge"
 
--- ===== Helpers =====
-local function pctComma(x)
-  x = tonumber(x) or 0
-  return string.format("%.2f%%", x)
-end
+-- ===== Primary Stat Resolution =====
+-- Determine primary stat INDEX (not value) from class/spec, so we never compare secret values.
+-- Stat indices: 1=Strength, 2=Agility, 4=Intellect
+local STAT_STRENGTH   = 1
+local STAT_AGILITY    = 2
+local STAT_INTELLECT  = 4
 
-local function ilvlComma(x)
-  x = tonumber(x) or 0
-  return string.format("%.2f", x)
-end
+-- Primary stat names for display
+local STAT_NAMES = {
+  [STAT_STRENGTH]  = "Strength",
+  [STAT_AGILITY]   = "Agility",
+  [STAT_INTELLECT] = "Intellect",
+}
 
-local function Safe_GetAverageItemLevel()
-  if type(_G.GetAverageItemLevel) ~= "function" then return 0 end
-  local ok, a, b = pcall(_G.GetAverageItemLevel)
-  if not ok then return 0 end
-  local overall  = tonumber(a) or 0
-  local equipped = tonumber(b) or nil
-  return equipped or overall
-end
+-- Returns stat index and name for the player's current class/spec, never comparing live values.
+-- Caches the result on the frame and re-resolves on spec change.
+local function GetPrimaryStatIndex(frame)
+  -- Check cache first
+  if frame._primaryStatIndex and frame._primaryStatName then
+    return frame._primaryStatIndex, frame._primaryStatName
+  end
 
-local function Safe_UnitStat(statIndex)
-  if type(_G.UnitStat) ~= "function" then return 0 end
-  local _, effective = _G.UnitStat("player", statIndex) -- base, effective, pos, neg
-  return tonumber(effective) or 0
-end
+  local _, englishClass = UnitClass("player")
+  -- GetSpecialization() is nil until spec data loads. Defaulting to 1 and caching
+  -- that would pin e.g. a Retribution paladin to Holy's Intellect for the session,
+  -- so an unresolved spec is recomputed next refresh instead of being cached.
+  local rawSpec = GetSpecialization and GetSpecialization() or nil
+  local specIndex = rawSpec or 1
+  local statIndex = nil
 
-local function GetPrimaryStat()
-  local str   = Safe_UnitStat(1)
-  local agi   = Safe_UnitStat(2)
-  local intel = Safe_UnitStat(4)
-  local name, val = "Strength", str
-  if agi >= str and agi >= intel then name, val = "Agility", agi end
-  if intel >= str and intel >= agi then name, val = "Intellect", intel end
-  return name, math.floor(val + 0.5)
+  -- Classes with fixed primary stat (no spec dependency)
+  if englishClass == "WARRIOR" or englishClass == "DEATHKNIGHT" then
+    statIndex = STAT_STRENGTH
+  elseif englishClass == "ROGUE" or englishClass == "HUNTER" or englishClass == "DEMONHUNTER" then
+    statIndex = STAT_AGILITY
+  elseif englishClass == "MAGE" or englishClass == "WARLOCK" or englishClass == "PRIEST" or englishClass == "EVOKER" then
+    statIndex = STAT_INTELLECT
+  -- Spec-dependent classes
+  elseif englishClass == "PALADIN" then
+    if specIndex == 1 then  -- Holy
+      statIndex = STAT_INTELLECT
+    else  -- Protection, Retribution
+      statIndex = STAT_STRENGTH
+    end
+  elseif englishClass == "DRUID" then
+    if specIndex == 1 or specIndex == 4 then  -- Balance, Restoration
+      statIndex = STAT_INTELLECT
+    else  -- Feral, Guardian
+      statIndex = STAT_AGILITY
+    end
+  elseif englishClass == "MONK" then
+    if specIndex == 2 then  -- Mistweaver
+      statIndex = STAT_INTELLECT
+    else  -- Brewmaster, Windwalker
+      statIndex = STAT_AGILITY
+    end
+  elseif englishClass == "SHAMAN" then
+    if specIndex == 2 then  -- Enhancement
+      statIndex = STAT_AGILITY
+    else  -- Elemental, Restoration
+      statIndex = STAT_INTELLECT
+    end
+  else
+    -- Fallback for unknown class (should never happen)
+    statIndex = STAT_STRENGTH
+  end
+
+  local statName = STAT_NAMES[statIndex] or "Primary"
+
+  -- Cache on frame, but only once the spec is actually known
+  if rawSpec then
+    frame._primaryStatIndex = statIndex
+    frame._primaryStatName = statName
+  end
+
+  return statIndex, statName
 end
 
 -- ===== Rating tokens =====
@@ -56,102 +98,229 @@ local LEECH_TOKEN        = _G.CR_LIFESTEAL or 36
 local AVOIDANCE_TOKEN    = _G.CR_AVOIDANCE or 37
 local SPEED_TOKEN        = _G.CR_SPEED or 38
 
-local function Safe_GetCombatRating(token)
-  if token and type(_G.GetCombatRating) == "function" then
-    return tonumber(_G.GetCombatRating(token)) or 0
-  end
-  return 0
-end
+-- Forward declaration
+local RefreshValues
 
-local function Safe_GetCombatRatingBonus(token)
-  if token and type(_G.GetCombatRatingBonus) == "function" then
-    return tonumber(_G.GetCombatRatingBonus(token)) or 0
-  end
-  return 0
-end
+-- ===== Throttled Refresh =====
+local function QueueRefresh(frame, cfg)
+  if not frame then return end
+  if frame._refreshQueued then return end
 
--- Versatility (inc = dmg/heal increase, red = dmg taken reduction)
-local function Safe_GetVersatilityBonuses(versRating)
-  versRating = tonumber(versRating) or 0
-  local inc, red = 0, 0
-
-  if type(_G.GetVersatilityBonus) == "function" then
-    -- Modern signature: GetVersatilityBonus(combatRating)
-    local ok1, v1, v2 = pcall(_G.GetVersatilityBonus, versRating)
-    if ok1 and type(v1) == "number" then
-      inc, red = v1 or 0, v2 or 0
-    else
-      -- Older signature: GetVersatilityBonus()
-      local ok2, w1, w2 = pcall(_G.GetVersatilityBonus)
-      if ok2 and type(w1) == "number" then
-        inc, red = w1 or 0, w2 or 0
+  frame._refreshQueued = true
+  C_Timer.After(0.15, function()
+    if frame then
+      local ok = pcall(RefreshValues, frame, cfg)
+      if not ok then
+        -- Silent error; stats may be 0 during loading
       end
     end
-  end
-
-  -- Fallbacks
-  if inc == 0 then
-    inc = Safe_GetCombatRatingBonus(VERS_INC_TOKEN)
-  end
-  if red == 0 then
-    red = VERS_RED_TOKEN and Safe_GetCombatRatingBonus(VERS_RED_TOKEN) or 0
-    if red == 0 and inc > 0 then red = inc / 2 end
-  end
-
-  return inc, red
+    if frame then
+      frame._refreshQueued = nil
+    end
+  end)
 end
 
-local function GatherStats()
-  local ilvl = Safe_GetAverageItemLevel()
+-- ===== Lightweight Stat Refresh (no layout changes) =====
+-- NEVER INSPECT, ALWAYS RENDER: raw API values go straight to SetFormattedText.
+-- In combat, stat APIs return secret values that break arithmetic/comparison but format fine.
+-- Each line wrapped in individual pcall so one failure doesn't blank the tile.
+RefreshValues = function(frame, cfg)
+  local showTertiary = cfg.showTertiary
+  if showTertiary == nil then showTertiary = false end
 
-  local primaryName, primaryVal = GetPrimaryStat()
-
-  local critRating  = Safe_GetCombatRating(CRIT_RATING_TOKEN)
-  local hasteRating = Safe_GetCombatRating(HASTE_RATING_TOKEN)
-  local mastRating  = Safe_GetCombatRating(MASTERY_TOKEN)
-  local versRating  = Safe_GetCombatRating(VERS_INC_TOKEN)
-
-  local critPct = 0
-  local hastePct = 0
-  local mastPct = 0
-
-  if type(_G.GetCritChance) == "function" then
-    local ok, val = pcall(_G.GetCritChance)
-    critPct = (ok and tonumber(val)) or 0
+  -- Determine desired order (saved in cfg.order) with sane defaults and validation
+  local DEFAULT_ORDER_BASE = { "ilvl", "primary", "crit", "haste", "mastery", "versatility" }
+  local DEFAULT_ORDER_TERTIARY = { "leech", "avoidance", "speed" }
+  local DEFAULT_ORDER = {}
+  for _, k in ipairs(DEFAULT_ORDER_BASE) do table.insert(DEFAULT_ORDER, k) end
+  if showTertiary then
+    for _, k in ipairs(DEFAULT_ORDER_TERTIARY) do table.insert(DEFAULT_ORDER, k) end
   end
 
-  if type(_G.GetHaste) == "function" then
-    local ok, val = pcall(_G.GetHaste)
-    hastePct = (ok and tonumber(val)) or 0
+  local VALID = {}
+  for _, k in ipairs(DEFAULT_ORDER) do VALID[k] = true end
+  local function contains(t, v) for _, x in ipairs(t) do if x == v then return true end end return false end
+
+  local order = {}
+  if cfg and type(cfg.order) == "table" then
+    for _, k in ipairs(cfg.order) do
+      if VALID[k] and not contains(order, k) then table.insert(order, k) end
+    end
+  end
+  -- append any missing keys to make sure we have all lines
+  for _, k in ipairs(DEFAULT_ORDER) do
+    if not contains(order, k) then table.insert(order, k) end
   end
 
-  if type(_G.GetMasteryEffect) == "function" then
-    local ok, val = pcall(_G.GetMasteryEffect)
-    mastPct = (ok and tonumber(val)) or 0
-  end
-
-  local versInc, versRed = Safe_GetVersatilityBonuses(versRating)
-
-  -- Tertiary stats
-  local leechRating = Safe_GetCombatRating(LEECH_TOKEN)
-  local leechPct = Safe_GetCombatRatingBonus(LEECH_TOKEN)
-  local avoidRating = Safe_GetCombatRating(AVOIDANCE_TOKEN)
-  local avoidPct = Safe_GetCombatRatingBonus(AVOIDANCE_TOKEN)
-  local speedRating = Safe_GetCombatRating(SPEED_TOKEN)
-  local speedPct = Safe_GetCombatRatingBonus(SPEED_TOKEN)
-
-  return {
-    ilvl = ilvl,
-    primaryName = primaryName,
-    primaryVal  = primaryVal,
-    crit  = { rating = math.floor(critRating  + 0.5), pct = critPct  },
-    haste = { rating = math.floor(hasteRating + 0.5), pct = hastePct },
-    mast  = { rating = math.floor(mastRating  + 0.5), pct = mastPct  },
-    vers  = { rating = math.floor(versRating  + 0.5), inc = versInc, red = versRed },
-    leech = { rating = math.floor(leechRating + 0.5), pct = leechPct },
-    avoid = { rating = math.floor(avoidRating + 0.5), pct = avoidPct },
-    speed = { rating = math.floor(speedRating + 0.5), pct = speedPct },
+  -- Per-line colors (unchanged from original)
+  local colorsByKey = {
+    ilvl        = { 1.0, 1.0, 1.0 },
+    primary     = { 0.40, 0.80, 1.00 }, -- primary stat always light blue
+    haste       = { 0.20, 1.00, 0.20 },
+    crit        = { 1.00, 0.20, 0.20 },
+    versatility = { 0.20, 0.60, 1.00 },
+    mastery     = { 1.00, 0.82, 0.00 },
+    leech       = { 0.80, 0.20, 0.80 }, -- purple
+    avoidance   = { 1.00, 0.60, 0.20 }, -- orange
+    speed       = { 0.40, 1.00, 0.80 }, -- cyan/teal
   }
+
+  -- Line FontStrings
+  local lines = { frame.line1, frame.line2, frame.line3, frame.line4, frame.line5, frame.line6, frame.line7, frame.line8, frame.line9 }
+
+  -- Render helper: pcall the render function, leave previous text on error
+  local function RenderLine(lineIndex, key, renderFn)
+    local fs = lines[lineIndex]
+    if not fs then return end
+
+    pcall(renderFn, fs)
+
+    -- Apply color regardless of render success
+    local col = colorsByKey[key] or colorsByKey.ilvl
+    fs:SetTextColor(col[1], col[2], col[3], 1)
+  end
+
+  -- Render each line in order
+  for i = 1, #lines do
+    local key = order[i] or DEFAULT_ORDER[i]
+
+    if key == "ilvl" then
+      RenderLine(i, key, function(fs)
+        local equipped, overall = 0, 0
+        if type(_G.GetAverageItemLevel) == "function" then
+          overall, equipped = _G.GetAverageItemLevel()
+        end
+        -- Use equipped if available, else overall; raw values passed straight through
+        local ilvl = (equipped and equipped > 0) and equipped or (overall or 0)
+        fs:SetFormattedText("iLvL: %.2f", ilvl)
+      end)
+
+    elseif key == "primary" then
+      RenderLine(i, key, function(fs)
+        local statIndex, statName = GetPrimaryStatIndex(frame)
+        local base, effective = 0, 0
+        if type(_G.UnitStat) == "function" then
+          base, effective = _G.UnitStat("player", statIndex)
+        end
+        -- %d truncates float, replacing math.floor(x + 0.5)
+        fs:SetFormattedText("%s: %d", statName, effective)
+      end)
+
+    elseif key == "haste" then
+      RenderLine(i, key, function(fs)
+        local pct = 0
+        if type(_G.GetHaste) == "function" then
+          pct = _G.GetHaste()
+        end
+        local rating = 0
+        if HASTE_RATING_TOKEN and type(_G.GetCombatRating) == "function" then
+          rating = _G.GetCombatRating(HASTE_RATING_TOKEN)
+        end
+        fs:SetFormattedText("Haste: %.2f%% - %d", pct, rating)
+      end)
+
+    elseif key == "crit" then
+      RenderLine(i, key, function(fs)
+        local pct = 0
+        if type(_G.GetCritChance) == "function" then
+          pct = _G.GetCritChance()
+        end
+        local rating = 0
+        if CRIT_RATING_TOKEN and type(_G.GetCombatRating) == "function" then
+          rating = _G.GetCombatRating(CRIT_RATING_TOKEN)
+        end
+        fs:SetFormattedText("Crit: %.2f%% - %d", pct, rating)
+      end)
+
+    elseif key == "mastery" then
+      RenderLine(i, key, function(fs)
+        local pct = 0
+        if type(_G.GetMasteryEffect) == "function" then
+          pct = _G.GetMasteryEffect()
+        end
+        local rating = 0
+        if MASTERY_TOKEN and type(_G.GetCombatRating) == "function" then
+          rating = _G.GetCombatRating(MASTERY_TOKEN)
+        end
+        fs:SetFormattedText("Mastery: %.2f%% - %d", pct, rating)
+      end)
+
+    elseif key == "versatility" then
+      -- The odd one out. Every other stat has a single API that already carries
+      -- its buffs, but the character sheet's versatility is a SUM: the bonus from
+      -- rating plus the bonus from auras (flasks, raid buffs). Adding them is
+      -- arithmetic, which is exactly what the client blocks on secret values, so
+      -- this is the one line that cannot recompute during combat. Out of combat
+      -- it is exact; in combat the add throws, RenderLine's pcall catches it and
+      -- the line keeps its last correct total rather than showing a partial one.
+      RenderLine(i, key, function(fs)
+        local rating = 0
+        if type(_G.GetCombatRating) == "function" and VERS_INC_TOKEN then
+          rating = _G.GetCombatRating(VERS_INC_TOKEN)
+        end
+        local fromRating = 0
+        if type(_G.GetCombatRatingBonus) == "function" and VERS_INC_TOKEN then
+          fromRating = _G.GetCombatRatingBonus(VERS_INC_TOKEN)
+        end
+        local fromAuras = 0
+        if type(_G.GetVersatilityBonus) == "function" and VERS_INC_TOKEN then
+          fromAuras = _G.GetVersatilityBonus(VERS_INC_TOKEN)
+        end
+        -- Second figure is the damage-taken reduction, the same sum over the
+        -- DAMAGE_TAKEN token. Matches the character sheet's "done / reduced" pair.
+        local redRating, redAuras = 0, 0
+        if VERS_RED_TOKEN then
+          if type(_G.GetCombatRatingBonus) == "function" then
+            redRating = _G.GetCombatRatingBonus(VERS_RED_TOKEN)
+          end
+          if type(_G.GetVersatilityBonus) == "function" then
+            redAuras = _G.GetVersatilityBonus(VERS_RED_TOKEN)
+          end
+        end
+        fs:SetFormattedText("Vers: %.2f%%/%.2f%% - %d",
+          fromRating + fromAuras, redRating + redAuras, rating)
+      end)
+
+    elseif key == "leech" then
+      RenderLine(i, key, function(fs)
+        local pct = 0
+        if type(_G.GetCombatRatingBonus) == "function" and LEECH_TOKEN then
+          pct = _G.GetCombatRatingBonus(LEECH_TOKEN)
+        end
+        local rating = 0
+        if type(_G.GetCombatRating) == "function" and LEECH_TOKEN then
+          rating = _G.GetCombatRating(LEECH_TOKEN)
+        end
+        fs:SetFormattedText("Leech: %.2f%% - %d", pct, rating)
+      end)
+
+    elseif key == "avoidance" then
+      RenderLine(i, key, function(fs)
+        local pct = 0
+        if type(_G.GetCombatRatingBonus) == "function" and AVOIDANCE_TOKEN then
+          pct = _G.GetCombatRatingBonus(AVOIDANCE_TOKEN)
+        end
+        local rating = 0
+        if type(_G.GetCombatRating) == "function" and AVOIDANCE_TOKEN then
+          rating = _G.GetCombatRating(AVOIDANCE_TOKEN)
+        end
+        fs:SetFormattedText("Avoidance: %.2f%% - %d", pct, rating)
+      end)
+
+    elseif key == "speed" then
+      RenderLine(i, key, function(fs)
+        local pct = 0
+        if type(_G.GetCombatRatingBonus) == "function" and SPEED_TOKEN then
+          pct = _G.GetCombatRatingBonus(SPEED_TOKEN)
+        end
+        local rating = 0
+        if type(_G.GetCombatRating) == "function" and SPEED_TOKEN then
+          rating = _G.GetCombatRating(SPEED_TOKEN)
+        end
+        fs:SetFormattedText("Speed: %.2f%% - %d", pct, rating)
+      end)
+    end
+  end
 end
 
 -- ===== Tile =====
@@ -231,7 +400,7 @@ function API.create(parent, cfg)
     f.line9:Hide()
   end
 
-  -- Right-click refresh
+  -- Right-click refresh (immediate, no throttle)
   f:EnableMouse(true)
   f:SetScript("OnMouseUp", function(self, btn)
     if btn == "RightButton" then
@@ -239,8 +408,22 @@ function API.create(parent, cfg)
     end
   end)
 
-  -- Update on relevant game events (gear/stat changes, spec swaps, ilvl updates)
-  if f.RegisterEvent then
+  -- Always-on poll: refresh stats every ~0.25s while shown (OnUpdate stops on hidden frames)
+  f._pollElapsed = 0
+  f:SetScript("OnUpdate", function(self, elapsed)
+    self._pollElapsed = (self._pollElapsed or 0) + elapsed
+    if self._pollElapsed >= 0.25 then
+      self._pollElapsed = 0
+      local ok = pcall(RefreshValues, self, cfg)
+      if not ok then
+        -- Silent error; stats may be 0 during loading
+      end
+    end
+  end)
+
+  -- Update on relevant game events (gear/stat changes, spec swaps, ilvl updates, buffs/procs)
+  if f.RegisterEvent and f.RegisterUnitEvent then
+    -- Non-unit events
     f:RegisterEvent("PLAYER_EQUIPMENT_CHANGED")
     f:RegisterEvent("UNIT_INVENTORY_CHANGED")
     f:RegisterEvent("COMBAT_RATING_UPDATE")
@@ -248,26 +431,65 @@ function API.create(parent, cfg)
     f:RegisterEvent("PLAYER_DAMAGE_DONE_MODS")
     f:RegisterEvent("PLAYER_AVG_ITEM_LEVEL_UPDATE")
     f:RegisterEvent("PLAYER_SPECIALIZATION_CHANGED")
-    f:RegisterEvent("UNIT_STATS")
-    f:RegisterEvent("PLAYER_REGEN_ENABLED")  -- Combat ended - refresh stats
-    f:SetScript("OnEvent", function(self) API.update(self, cfg) end)
+    f:RegisterEvent("PLAYER_ENTERING_WORLD")
+
+    -- Combat state events (non-unit)
+    f:RegisterEvent("PLAYER_REGEN_DISABLED")  -- Combat started
+    f:RegisterEvent("PLAYER_REGEN_ENABLED")   -- Combat ended
+
+    -- Unit-filtered events for player only (buffs, stats, haste, etc.)
+    -- Guard with pcall in case event doesn't exist in this client version
+    local function SafeRegisterUnitEvent(evt)
+      pcall(f.RegisterUnitEvent, f, evt, "player")
+    end
+
+    SafeRegisterUnitEvent("UNIT_AURA")
+    SafeRegisterUnitEvent("UNIT_STATS")
+    SafeRegisterUnitEvent("UNIT_SPELL_HASTE")
+    SafeRegisterUnitEvent("UNIT_ATTACK_SPEED")
+    SafeRegisterUnitEvent("UNIT_RANGEDDAMAGE")
+    SafeRegisterUnitEvent("UNIT_RANGED_ATTACK_POWER")
+    SafeRegisterUnitEvent("UNIT_ATTACK_POWER")
+    SafeRegisterUnitEvent("UNIT_DAMAGE")
+    SafeRegisterUnitEvent("UNIT_RESISTANCES")
+
+    -- Event handler with throttling for high-frequency events
+    f:SetScript("OnEvent", function(self, event, ...)
+      if event == "PLAYER_ENTERING_WORLD" or event == "PLAYER_SPECIALIZATION_CHANGED" then
+        -- Spec change invalidates primary stat cache
+        self._primaryStatIndex = nil
+        self._primaryStatName = nil
+        -- Major state changes - full update (layout + stats)
+        API.update(self, cfg)
+      else
+        -- All other events: throttled refresh
+        QueueRefresh(self, cfg)
+      end
+    end)
   end
 
   -- First paint
-  f:SetScript("OnShow", function(self) API.update(self, cfg) end)
+  f:SetScript("OnShow", function(self)
+    API.update(self, cfg)
+  end)
   if C_Timer and C_Timer.After then
     C_Timer.After(0.05, function() if f and f:IsShown() then API.update(f, cfg) end end)
   end
   API.update(f, cfg)
 
   function f:Destroy()
+    -- Clear throttle flag so pending callback no-ops
+    self._refreshQueued = nil
+    -- Unregister events
     if self.UnregisterAllEvents then
       self:UnregisterAllEvents()
     end
+    -- Clear scripts
     if self.SetScript then
       self:SetScript("OnEvent", nil)
       self:SetScript("OnShow", nil)
       self:SetScript("OnMouseUp", nil)
+      self:SetScript("OnUpdate", nil)
     end
   end
   return f
@@ -380,99 +602,8 @@ function API.update(frame, cfg)
 
   frame:SetSize(360, newHeight)
 
-  -- Try to gather current stats
-  local ok, S_or_err = pcall(GatherStats)
-  local S = nil
-
-  -- Validate if stats are reasonable (ilvl > 0 means we got real data)
-  local function isValidStats(stats)
-    return stats and stats.ilvl and stats.ilvl > 0
-  end
-
-  if ok and isValidStats(S_or_err) then
-    -- Success with valid data - cache and use it
-    S = S_or_err
-    frame._cachedStats = S
-  elseif frame._cachedStats and isValidStats(frame._cachedStats) then
-    -- Failed or invalid data, but we have valid cached data - use cache
-    S = frame._cachedStats
-  else
-    -- No valid cached data - initialize with current attempt or empty defaults
-    if ok and S_or_err then
-      S = S_or_err
-    else
-      S = {
-        ilvl = 0,
-        primaryName = "Primary",
-        primaryVal = 0,
-        crit = { rating = 0, pct = 0 },
-        haste = { rating = 0, pct = 0 },
-        mast = { rating = 0, pct = 0 },
-        vers = { rating = 0, inc = 0, red = 0 },
-        leech = { rating = 0, pct = 0 },
-        avoid = { rating = 0, pct = 0 },
-        speed = { rating = 0, pct = 0 },
-      }
-    end
-  end
-
-  -- Determine desired order (saved in cfg.order) with sane defaults and validation
-  local DEFAULT_ORDER_BASE = { "ilvl", "primary", "crit", "haste", "mastery", "versatility" }
-  local DEFAULT_ORDER_TERTIARY = { "leech", "avoidance", "speed" }
-  local DEFAULT_ORDER = {}
-  for _, k in ipairs(DEFAULT_ORDER_BASE) do table.insert(DEFAULT_ORDER, k) end
-  if showTertiary then
-    for _, k in ipairs(DEFAULT_ORDER_TERTIARY) do table.insert(DEFAULT_ORDER, k) end
-  end
-
-  local VALID = {}
-  for _, k in ipairs(DEFAULT_ORDER) do VALID[k] = true end
-  local function contains(t, v) for _, x in ipairs(t) do if x == v then return true end end return false end
-
-  local order = {}
-  if cfg and type(cfg.order) == "table" then
-    for _, k in ipairs(cfg.order) do
-      if VALID[k] and not contains(order, k) then table.insert(order, k) end
-    end
-  end
-  -- append any missing keys to make sure we have all lines
-  for _, k in ipairs(DEFAULT_ORDER) do
-    if not contains(order, k) then table.insert(order, k) end
-  end
-
-  -- Prepare texts by key (format and colors to match requested style)
-  local textsByKey = {
-    ilvl         = ("iLvL: %s"):format(ilvlComma(S.ilvl)),
-    primary      = ("%s: %d"):format(S.primaryName, S.primaryVal or 0),
-    haste        = ("Haste: %s - %d"):format(       pctComma(S.haste.pct), S.haste.rating),
-    crit         = ("Crit: %s - %d"):format(        pctComma(S.crit.pct),  S.crit.rating),
-    versatility  = ("Vers: %s - %d"):format(        pctComma(S.vers.inc),  S.vers.rating),
-    mastery      = ("Mastery: %s - %d"):format(     pctComma(S.mast.pct),  S.mast.rating),
-    leech        = ("Leech: %s - %d"):format(       pctComma(S.leech.pct), S.leech.rating),
-    avoidance    = ("Avoidance: %s - %d"):format(   pctComma(S.avoid.pct), S.avoid.rating),
-    speed        = ("Speed: %s - %d"):format(       pctComma(S.speed.pct), S.speed.rating),
-  }
-  local colorsByKey = {
-    ilvl        = { 1.0, 1.0, 1.0 },
-    primary     = { 0.40, 0.80, 1.00 }, -- primary stat always light blue
-    haste       = { 0.20, 1.00, 0.20 },
-    crit        = { 1.00, 0.20, 0.20 },
-    versatility = { 0.20, 0.60, 1.00 },
-    mastery     = { 1.00, 0.82, 0.00 },
-    leech       = { 0.80, 0.20, 0.80 }, -- purple
-    avoidance   = { 1.00, 0.60, 0.20 }, -- orange
-    speed       = { 0.40, 1.00, 0.80 }, -- cyan/teal
-  }
-
-  -- Assign lines according to order (and apply per-line colors)
-  local lines = { frame.line1, frame.line2, frame.line3, frame.line4, frame.line5, frame.line6, frame.line7, frame.line8, frame.line9 }
-  for i = 1, #lines do
-    local key = order[i] or DEFAULT_ORDER[i]
-    local fs = lines[i]
-    fs:SetText(textsByKey[key] or "")
-    local col = colorsByKey[key] or colorsByKey.ilvl
-    fs:SetTextColor(col[1], col[2], col[3], 1)
-  end
+  -- Update stat values (lightweight refresh)
+  RefreshValues(frame, cfg)
 end
 
 SkyInfoTiles.RegisterTileType("charstats", API)

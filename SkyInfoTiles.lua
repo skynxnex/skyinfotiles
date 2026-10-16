@@ -27,6 +27,7 @@ local DEFAULTS = {
   scope       = "char",  -- "char" or "warband" (some tiles care about this)
   tiles       = {},      -- legacy; migrated into profiles.Default.tiles
   fontOutline = "OUTLINE",
+  autoHide    = { combat = false, raid = false, mythicPlus = false },
   profiles    = { Default = { tiles = {} } },
   characterProfiles = {}, -- map ["CharName-Realm"] = "ProfileName"
 }
@@ -660,8 +661,10 @@ end
 -- ===== Exposed toggles for Options =====
 function SkyInfoTiles.SetLocked(v)
   SkyInfoTilesDB.locked = not not v
-  SkyInfoTiles.Rebuild()
-  SkyInfoTiles.UpdateAll()
+  -- The lock only affects drag/mouse handling and the unlock border, so re-apply
+  -- it to the live frames instead of rebuilding every tile (a rebuild is skipped
+  -- entirely in combat, which is what used to desync the state)
+  SkyInfoTiles.ApplyLockState()
 end
 
 function SkyInfoTiles.GetTileEnabledByKey(key)
@@ -679,11 +682,39 @@ function SkyInfoTiles.SetTileEnabledByKey(key, enabled)
   if SkyInfoTiles._OptionsRefresh then SkyInfoTiles._OptionsRefresh() end
 end
 
+function SkyInfoTiles.GetTileHideInCombat(key)
+  for _, t in ipairs(SkyInfoTiles.GetActiveTiles() or {}) do
+    if t.key == key then return t.hideInCombat == true end
+  end
+  return false
+end
+
+function SkyInfoTiles.SetTileHideInCombat(key, on)
+  local cfg = SkyInfoTiles.GetOrCreateTileCfg(key)
+  if not cfg then return end
+  cfg.hideInCombat = on and true or nil
+  SkyInfoTiles.ApplyVisibility()
+end
+
 -- ===== Frames lifecycle =====
 local tilesFrames = {}
 
 local function InLockdown()
   return InCombatLockdown and InCombatLockdown()
+end
+
+-- InCombatLockdown() is not yet true when PLAYER_REGEN_DISABLED fires, so combat
+-- state for visibility decisions is tracked from the events themselves and only
+-- falls back to the API (for the case where we loaded or reloaded mid-fight).
+local inCombatState = false
+
+local function InCombat()
+  if inCombatState then return true end
+  return (InCombatLockdown and InCombatLockdown()) or false
+end
+
+function SkyInfoTiles.SetCombatState(v)
+  inCombatState = v and true or false
 end
 
 SkyInfoTiles._pendingRebuild = SkyInfoTiles._pendingRebuild or false
@@ -758,11 +789,22 @@ local function SetMovable(f)
             local frameLeft = self:GetLeft()
             local frameTop = self:GetTop()
             if frameLeft and frameTop and UIParent then
-              local uiParentTop = UIParent:GetTop()
+              local uiParentLeft, uiParentTop = UIParent:GetLeft(), UIParent:GetTop()
               if uiParentTop then
+                -- GetLeft/GetTop are in the frame's own scale units, while
+                -- UIParent's are in its own. SetPoint offsets are read back in
+                -- frame units, so convert before storing or scaled tiles
+                -- (e.g. Dungeon Ports) jump on the next rebuild.
+                local ratio = 1
+                if self.GetEffectiveScale and UIParent.GetEffectiveScale then
+                  local frameScale = self:GetEffectiveScale()
+                  if frameScale and frameScale > 0 then
+                    ratio = UIParent:GetEffectiveScale() / frameScale
+                  end
+                end
                 self._cfg.point = "TOPLEFT"
-                self._cfg.x = math.floor(frameLeft + 0.5)
-                self._cfg.y = math.floor((frameTop - uiParentTop) + 0.5)
+                self._cfg.x = math.floor((frameLeft - (uiParentLeft or 0) * ratio) + 0.5)
+                self._cfg.y = math.floor((frameTop - uiParentTop * ratio) + 0.5)
               end
             end
           else
@@ -793,6 +835,175 @@ local function SetMovable(f)
         pcall(f.SetScript, f, "OnHide", nil)
       end
     end
+  end
+end
+
+-- ===== Auto-hide (contextual visibility) =====
+-- Global (not per-profile) rules that temporarily hide every tile in combat,
+-- in raid instances or during Mythic+. Tiles are only hidden, never disabled,
+-- so the saved configuration is left untouched.
+local AUTOHIDE_RULES = {
+  { key = "combat",     label = "Hide in Combat",   tooltip = "Hide all tiles while you are in combat" },
+  { key = "raid",       label = "Hide in Raid",     tooltip = "Hide all tiles while you are inside a raid instance" },
+  { key = "mythicPlus", label = "Hide in Mythic+",  tooltip = "Hide all tiles while you are inside a Mythic Keystone dungeon" },
+}
+SkyInfoTiles.AUTOHIDE_RULES = AUTOHIDE_RULES
+
+function SkyInfoTiles.GetAutoHide()
+  SkyInfoTilesDB = SkyInfoTilesDB or {}
+  SkyInfoTilesDB.autoHide = SkyInfoTilesDB.autoHide or {}
+  return SkyInfoTilesDB.autoHide
+end
+
+local function GetInstanceType()
+  if not GetInstanceInfo then return nil, nil end
+  local ok, _, instanceType, difficultyID = pcall(GetInstanceInfo)
+  if not ok then return nil, nil end
+  return instanceType, difficultyID
+end
+
+local function IsMythicPlus()
+  if C_ChallengeMode and C_ChallengeMode.IsChallengeModeActive then
+    local ok, active = pcall(C_ChallengeMode.IsChallengeModeActive)
+    if ok and active then return true end
+  end
+  -- Also cover the time inside the dungeon before the key is activated
+  local instanceType, difficultyID = GetInstanceType()
+  return instanceType == "party" and difficultyID == 8
+end
+
+function SkyInfoTiles.ShouldAutoHide()
+  local rules = SkyInfoTiles.GetAutoHide()
+  if not (rules.combat or rules.raid or rules.mythicPlus) then return false end
+  if rules.combat and InCombat() then return true end
+  if rules.raid then
+    local instanceType = GetInstanceType()
+    if instanceType == "raid" then return true end
+  end
+  if rules.mythicPlus and IsMythicPlus() then return true end
+  return false
+end
+
+-- Frames owning secure (protected) children must not be hidden in combat,
+-- so those fade out instead and get properly hidden once combat ends.
+local function HasProtectedChild(f, depth)
+  depth = depth or 0
+  if depth > 3 or not f or not f.GetChildren then return false end
+  for _, child in ipairs({ f:GetChildren() }) do
+    if child.IsProtected and child:IsProtected() then return true end
+    if HasProtectedChild(child, depth + 1) then return true end
+  end
+  return false
+end
+
+local function AlphaHide(f)
+  if not f._autoHiddenAlpha then
+    local a = (f.GetAlpha and f:GetAlpha()) or 1
+    if a <= 0 then a = 1 end -- never restore to invisible
+    f._autoHiddenAlpha = a
+  end
+  pcall(f.SetAlpha, f, 0)
+end
+
+-- Keep tiles down if they re-show themselves (own events) while auto-hidden
+local function EnsureAutoHideHook(f)
+  if f._autoHideHooked or not f.HookScript then return end
+  f._autoHideHooked = true
+  f:HookScript("OnShow", function(self)
+    if self._autoHidden and SkyInfoTiles.ShouldAutoHide() then
+      pcall(self.Hide, self)
+    end
+  end)
+end
+
+local function SetTileAutoHidden(f, hide)
+  if not f then return end
+  if hide then
+    EnsureAutoHideHook(f)
+    if InCombat() and HasProtectedChild(f) then
+      AlphaHide(f)
+      return
+    end
+    if f._autoHiddenAlpha then
+      pcall(f.SetAlpha, f, f._autoHiddenAlpha)
+      f._autoHiddenAlpha = nil
+    end
+    if f.IsShown and f:IsShown() then
+      pcall(f.Hide, f)
+      -- If Hide() was refused (protection/taint), fall back to fading out
+      if f:IsShown() then AlphaHide(f) end
+      f._autoHidden = true
+    end
+  else
+    if f._autoHiddenAlpha then
+      pcall(f.SetAlpha, f, f._autoHiddenAlpha)
+      f._autoHiddenAlpha = nil
+    end
+    -- Only re-show what we hid ourselves
+    if f._autoHidden then
+      f._autoHidden = nil
+      pcall(f.Show, f)
+    end
+  end
+end
+
+function SkyInfoTiles.ApplyVisibility()
+  local globalHide = SkyInfoTiles.ShouldAutoHide()
+  local inCombat = InCombat() and true or false
+  -- Instrumentation for /skytiles autohide; cheap and lets the debug dump say
+  -- whether this ever ran rather than only what the current state looks like
+  SkyInfoTiles._applyVisN = (SkyInfoTiles._applyVisN or 0) + 1
+  SkyInfoTiles._applyVisCombat = inCombat
+  for _, f in ipairs(tilesFrames) do
+    local hide = globalHide
+    if (not hide) and inCombat and f._cfg and f._cfg.hideInCombat then
+      hide = true
+    end
+    f._lastHideDecision = hide
+    SetTileAutoHidden(f, hide)
+  end
+end
+
+-- /skytiles autohide status
+function SkyInfoTiles.DebugVisibility()
+  local rules = SkyInfoTiles.GetAutoHide()
+  local instanceType, difficultyID = GetInstanceType()
+  Print("Auto-hide status:")
+  for _, rule in ipairs(AUTOHIDE_RULES) do
+    Print(("  %s = %s"):format(rule.key, rules[rule.key] and "|cff00ff00on|r" or "off"))
+  end
+  Print(("  InCombat = %s  (InCombatLockdown = %s)"):format(tostring(InCombat()), tostring(InLockdown() and true or false)))
+  Print(("  instanceType = %s, difficultyID = %s, mythicPlus = %s")
+    :format(tostring(instanceType), tostring(difficultyID), tostring(IsMythicPlus())))
+  Print(("  ShouldAutoHide = %s"):format(tostring(SkyInfoTiles.ShouldAutoHide())))
+  Print("Per-tile Hide in Combat:")
+  for _, cat in ipairs(CATALOG) do
+    local state = SkyInfoTiles.GetTileHideInCombat(cat.key)
+    Print(("  %s = %s"):format(cat.key, state and "|cff00ff00on|r" or "off"))
+  end
+  local shown, hidden, faded = 0, 0, 0
+  for _, f in ipairs(tilesFrames) do
+    if f.IsShown and f:IsShown() then shown = shown + 1 else hidden = hidden + 1 end
+    if f._autoHiddenAlpha then faded = faded + 1 end
+  end
+  Print(("  tile frames = %d (shown %d, hidden %d, faded %d)")
+    :format(#tilesFrames, shown, hidden, faded))
+  -- Per-frame view: shows whether each live frame's _cfg is the same table the
+  -- setter writes to, which a catalog-level dump above cannot reveal
+  Print(("  ApplyVisibility ran %s times, last with inCombat=%s, lastEvent=%s"):format(
+    tostring(SkyInfoTiles._applyVisN or 0),
+    tostring(SkyInfoTiles._applyVisCombat),
+    tostring(SkyInfoTiles._lastAutoHideEvent)))
+  Print("Live frames:")
+  for _, f in ipairs(tilesFrames) do
+    local cfg = f._cfg
+    Print(("  %s hideInCombat=%s decided=%s shown=%s alpha=%.2f protected=%s"):format(
+      tostring(cfg and cfg.key or "?"),
+      tostring(cfg and cfg.hideInCombat or false),
+      tostring(f._lastHideDecision),
+      tostring(f.IsShown and f:IsShown() or false),
+      (f.GetAlpha and f:GetAlpha()) or -1,
+      tostring(HasProtectedChild(f))))
   end
 end
 
@@ -843,6 +1054,8 @@ function SkyInfoTiles.Rebuild()
       end
     end
   end
+
+  SkyInfoTiles.ApplyVisibility()
 end
 
 function SkyInfoTiles.UpdateAll()
@@ -871,6 +1084,8 @@ function SkyInfoTiles.UpdateAll()
       end
     end
   end
+
+  SkyInfoTiles.ApplyVisibility()
 end
 
 -- ===== Reset to catalog defaults =====
@@ -911,15 +1126,18 @@ function SkyInfoTiles.RefreshCurrencyTile()
 end
 
 function SkyInfoTiles.ToggleLock()
-  SkyInfoTilesDB.locked = not SkyInfoTilesDB.locked
-  SkyInfoTiles.ApplyLockState()
+  SkyInfoTiles.SetLocked(not SkyInfoTilesDB.locked)
   Print(SkyInfoTilesDB.locked and "Locked" or "Unlocked")
-  -- Update options window if open
-  if SkyInfoTiles._OptionsRefresh then SkyInfoTiles._OptionsRefresh() end
 end
 
+-- Single source of truth: push SkyInfoTilesDB.locked onto every live tile frame
+-- and let the options window resync from the DB. Safe to call from anywhere
+-- (SetMovable defers the protected parts on its own while in combat).
 function SkyInfoTiles.ApplyLockState()
-  SkyInfoTiles.SetLocked(SkyInfoTilesDB.locked)
+  for _, f in ipairs(tilesFrames) do
+    SetMovable(f)
+  end
+  if SkyInfoTiles._OptionsRefresh then SkyInfoTiles._OptionsRefresh() end
 end
 
 function SkyInfoTiles.ResetProfile()
@@ -944,8 +1162,8 @@ SlashCmdList["SKYINFOTILES"] = function(msg)
   msg = Trim(msg or "")
   local cmd, rest = msg:match("^(%S+)%s*(.*)$")
   if not cmd or cmd == "" then
-    Print("Commands: lock, unlock, enable <key>, disable <key>, list, reset, clean, options, scope <char|warband>, outline <none|outline|thick>, layout <key> <horizontal|vertical>, preview <key> <on|off>, scale <key> <0.5-2.0>")
-    Print("Keys: currencies, keystone, charstats, crosshair, clock, dungeonports, bufftracker, infobar")
+    Print("Commands: lock, unlock, enable <key>, disable <key>, list, reset, clean, options, scope <char / warband>, outline <none / outline / thick>, layout <key> <horizontal / vertical>, preview <key> <on / off>, scale <key> <0.5-2.0>, autohide <combat / raid / mplus> <on / off>, hidecombat [<key> <on / off>]")
+    Print("Keys: currencies, keystone, charstats, crosshair, clock, dungeonports, bufftracker, infobar, manawarning")
     return
   end
   cmd = cmd:lower()
@@ -984,9 +1202,91 @@ SlashCmdList["SKYINFOTILES"] = function(msg)
 
 
 
+  if cmd == "autohide" then
+    local ALIASES = {
+      combat = "combat",
+      raid = "raid",
+      mplus = "mythicPlus", ["m+"] = "mythicPlus", mythic = "mythicPlus",
+      mythicplus = "mythicPlus", keystone = "mythicPlus",
+    }
+    local rules = SkyInfoTiles.GetAutoHide()
+    local which, state = rest:match("^(%S+)%s*(%S*)$")
+    if not which or which == "" then
+      SkyInfoTiles.DebugVisibility()
+      Print("Usage: /skytiles autohide <combat / raid / mplus> <on / off>")
+      return
+    end
+    if which:lower() == "status" or which:lower() == "debug" then
+      SkyInfoTiles.DebugVisibility()
+      return
+    end
+    if which:lower() == "test" then
+      -- Force-hide everything for 5s to verify the hide mechanism itself
+      for _, f in ipairs(tilesFrames) do SetTileAutoHidden(f, true) end
+      Print("Force-hiding all tiles for 5 seconds...")
+      C_Timer.After(5, function() SkyInfoTiles.ApplyVisibility() end)
+      return
+    end
+    local field = ALIASES[which:lower()]
+    if not field then
+      Print("Usage: /skytiles autohide <combat / raid / mplus> <on / off>")
+      return
+    end
+    state = (state or ""):lower()
+    if state == "" then
+      rules[field] = not rules[field]
+    elseif state == "on" or state == "true" or state == "1" then
+      rules[field] = true
+    elseif state == "off" or state == "false" or state == "0" then
+      rules[field] = false
+    else
+      Print("Usage: /skytiles autohide <combat / raid / mplus> <on / off>")
+      return
+    end
+    SkyInfoTiles.ApplyVisibility()
+    if SkyInfoTiles._OptionsRefresh then SkyInfoTiles._OptionsRefresh() end
+    Print(("Auto-hide %s: %s"):format(field, rules[field] and "ON" or "OFF"))
+    return
+  end
+
+  if cmd == "hidecombat" then
+    local key, state = rest:match("^(%S+)%s*(%S*)$")
+    if not key or key == "" then
+      Print("Per-tile Hide in Combat:")
+      for _, cat in ipairs(CATALOG) do
+        local on = SkyInfoTiles.GetTileHideInCombat(cat.key)
+        Print(("  [%s] %s: %s"):format(cat.key, cat.label, on and "|cff00ff00on|r" or "off"))
+      end
+      Print("Usage: /skytiles hidecombat <key> <on / off>")
+      return
+    end
+    local cat = FindCatByKey(key)
+    if not cat then
+      Print("Unknown tile key: " .. tostring(key))
+      Print("Valid keys: currencies, keystone, charstats, crosshair, clock, dungeonports, bufftracker, infobar, manawarning")
+      return
+    end
+    state = (state or ""):lower()
+    local newVal
+    if state == "" then
+      newVal = not SkyInfoTiles.GetTileHideInCombat(key)
+    elseif state == "on" or state == "true" or state == "1" then
+      newVal = true
+    elseif state == "off" or state == "false" or state == "0" then
+      newVal = false
+    else
+      Print("Usage: /skytiles hidecombat <key> <on / off>")
+      return
+    end
+    SkyInfoTiles.SetTileHideInCombat(key, newVal)
+    if SkyInfoTiles._OptionsRefresh then SkyInfoTiles._OptionsRefresh() end
+    Print(("[%s] Hide in Combat: %s"):format(key, newVal and "ON" or "OFF"))
+    return
+  end
+
   if cmd == "scope" then
     local v = (rest or ""):lower()
-    if v ~= "char" and v ~= "warband" then Print("Usage: /skytiles scope <char|warband>"); return end
+    if v ~= "char" and v ~= "warband" then Print("Usage: /skytiles scope <char / warband>"); return end
     SkyInfoTilesDB.scope = v; SkyInfoTiles.UpdateAll(); Print("Scope set to "..v.."."); return
   end
 
@@ -1006,10 +1306,10 @@ SlashCmdList["SKYINFOTILES"] = function(msg)
 
   if cmd == "layout" then
     local key, orient = rest:match("^(%S+)%s+(%S+)$")
-    if not key or not orient then Print("Usage: /skytiles layout <key> <horizontal|vertical>"); return end
+    if not key or not orient then Print("Usage: /skytiles layout <key> <horizontal / vertical>"); return end
     orient = orient:lower()
     if orient ~= "horizontal" and orient ~= "vertical" then
-      Print("Usage: /skytiles layout <key> <horizontal|vertical>"); return
+      Print("Usage: /skytiles layout <key> <horizontal / vertical>"); return
     end
     local cat = FindCatByKey(key)
     if not cat then Print("Unknown key: " .. tostring(key)); return end
@@ -1022,10 +1322,10 @@ SlashCmdList["SKYINFOTILES"] = function(msg)
 
   if cmd == "preview" then
     local key, state = rest:match("^(%S+)%s+(%S+)$")
-    if not key or not state then Print("Usage: /skytiles preview <key> <on|off>"); return end
+    if not key or not state then Print("Usage: /skytiles preview <key> <on / off>"); return end
     state = state:lower()
     if state ~= "on" and state ~= "off" and state ~= "true" and state ~= "false" then
-      Print("Usage: /skytiles preview <key> <on|off>"); return
+      Print("Usage: /skytiles preview <key> <on / off>"); return
     end
     local cat = FindCatByKey(key)
     if not cat then Print("Unknown key: " .. tostring(key)); return end
@@ -1054,7 +1354,7 @@ SlashCmdList["SKYINFOTILES"] = function(msg)
   if cmd == "strata" then
     local key, strataVal = rest:match("^(%S+)%s+(%S+)$")
     if not key or not strataVal then
-      Print("Usage: /skytiles strata <key> <BACKGROUND|LOW|MEDIUM|HIGH|DIALOG|FULLSCREEN|FULLSCREEN_DIALOG|TOOLTIP>")
+      Print("Usage: /skytiles strata <key> <BACKGROUND / LOW / MEDIUM / HIGH / DIALOG / FULLSCREEN / FULLSCREEN_DIALOG / TOOLTIP>")
       return
     end
 
@@ -1142,10 +1442,13 @@ SlashCmdList["SKYINFOTILES"] = function(msg)
       end
       return
     else
-      Print("Usage: /skytiles profile <list|set|new|rename|delete>")
+      Print("Usage: /skytiles profile <list / set / new / rename / delete>")
       return
     end
   end
+
+
+
 
   Print("Unknown command.")
 end
@@ -1156,6 +1459,19 @@ ev:RegisterEvent("PLAYER_LOGIN")
 ev:RegisterEvent("CURRENCY_DISPLAY_UPDATE")
 ev:RegisterEvent("PLAYER_SPECIALIZATION_CHANGED")
 ev:RegisterEvent("PLAYER_REGEN_ENABLED")
+-- Auto-hide triggers: pcall'd because an event name missing from the current
+-- client build would otherwise abort the rest of this file
+for _, e in ipairs({
+  "PLAYER_REGEN_DISABLED",
+  "PLAYER_ENTERING_WORLD",
+  "ZONE_CHANGED_NEW_AREA",
+  "PLAYER_DIFFICULTY_CHANGED",
+  "CHALLENGE_MODE_START",
+  "CHALLENGE_MODE_COMPLETED",
+  "CHALLENGE_MODE_RESET",
+}) do
+  pcall(ev.RegisterEvent, ev, e)
+end
 ev:SetScript("OnEvent", function(self, event, ...)
   if event == "PLAYER_LOGIN" then
     SkyInfoTilesDB = SkyInfoTilesDB or {}
@@ -1308,11 +1624,34 @@ ev:SetScript("OnEvent", function(self, event, ...)
     SkyInfoTiles.UpdateAll()
     if SkyInfoTiles._OptionsRefresh then SkyInfoTiles._OptionsRefresh() end
   elseif event == "PLAYER_REGEN_ENABLED" then
+    SkyInfoTiles.SetCombatState(false)
     if SkyInfoTiles._pendingRebuild then
       SkyInfoTiles._pendingRebuild = false
       SkyInfoTiles.Rebuild()
       SkyInfoTiles.UpdateAll()
       if SkyInfoTiles._OptionsRefresh then SkyInfoTiles._OptionsRefresh() end
+    end
+    -- SetMovable skips mouse/drag setup during combat, so resync it now
+    SkyInfoTiles.ApplyLockState()
+    SkyInfoTiles.ApplyVisibility()
+  elseif event == "PLAYER_REGEN_DISABLED"
+      or event == "PLAYER_ENTERING_WORLD"
+      or event == "ZONE_CHANGED_NEW_AREA"
+      or event == "PLAYER_DIFFICULTY_CHANGED"
+      or event == "CHALLENGE_MODE_START"
+      or event == "CHALLENGE_MODE_COMPLETED"
+      or event == "CHALLENGE_MODE_RESET" then
+    if event == "PLAYER_REGEN_DISABLED" then
+      SkyInfoTiles.SetCombatState(true)
+    end
+    if event == "PLAYER_ENTERING_WORLD" then
+      SkyInfoTiles.SetCombatState(InCombatLockdown and InCombatLockdown())
+    end
+    SkyInfoTiles._lastAutoHideEvent = event
+    SkyInfoTiles.ApplyVisibility()
+    -- Instance info can lag a moment behind the zone change
+    if event == "PLAYER_ENTERING_WORLD" and C_Timer and C_Timer.After then
+      C_Timer.After(1, SkyInfoTiles.ApplyVisibility)
     end
   end
 end)

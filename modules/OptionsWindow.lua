@@ -728,6 +728,10 @@ local function CreateOptionsWindow()
     sidebarButtons[1].text:SetTextColor(1, 1, 1, 1)
   end
 
+  -- Part2 is a separate function and cannot see these locals, so pass them on the frame
+  f.sidebarButtons = sidebarButtons
+  f.SelectSidebarButton = SelectSidebarButton
+
   -- Content area (no backdrop template - fully transparent)
   local contentArea = CreateFrame("Frame", nil, f)
   contentArea:SetPoint("TOPLEFT", sidebar, "TOPRIGHT", 50, -120)  -- More right, further down
@@ -746,26 +750,92 @@ local function CreateOptionsWindow()
   bg:SetAllPoints()
   bg:SetColorTexture(0, 0, 0, 0)
 
+  -- Scroll frame for General tab content
+  local scrollFrame = CreateFrame("ScrollFrame", nil, generalTab, "UIPanelScrollFrameTemplate")
+  scrollFrame:SetPoint("TOPLEFT", 5, -10)
+  scrollFrame:SetPoint("BOTTOMRIGHT", -25, 10)
+
+  local scrollChild = CreateFrame("Frame", nil, scrollFrame)
+  scrollChild:SetSize(580, 1) -- Height set dynamically at end
+  scrollFrame:SetScrollChild(scrollChild)
+
+  generalTab.scrollFrame = scrollFrame
+  generalTab.scrollChild = scrollChild
+
   local yOffset = -10
 
   -- Lock toggle
-  local lockRow, h1 = W:CreateToggle(generalTab, yOffset, "Lock Tiles",
+  local lockRow, h1 = W:CreateToggle(scrollChild, yOffset, "Lock Tiles",
     function() return SkyInfoTilesDB.locked end,
     function(val)
-      SkyInfoTilesDB.locked = val
-      SkyInfoTiles.ApplyLockState()
+      -- Go through SetLocked so the DB write and the frame update always
+      -- happen together, exactly like the minimap button and /skytiles lock
+      SkyInfoTiles.SetLocked(val)
     end,
     "Prevent tiles from being dragged and repositioned"
   )
   generalTab.lockRow = lockRow
   yOffset = yOffset - h1 - 10
 
+  -- === Auto-Hide (contextual visibility) ===
+  local _, autoHideHeaderH = W:CreateSectionHeader(scrollChild, yOffset, "Auto-Hide")
+  yOffset = yOffset - autoHideHeaderH - 10
+
+  local autoHideRows = {}
+  for _, rule in ipairs(SkyInfoTiles.AUTOHIDE_RULES or {}) do
+    local ruleKey = rule.key
+    local row, rowH = W:CreateToggle(scrollChild, yOffset, rule.label,
+      function()
+        if not SkyInfoTiles.GetAutoHide then return false end
+        return SkyInfoTiles.GetAutoHide()[ruleKey] or false
+      end,
+      function(val)
+        if SkyInfoTiles.GetAutoHide then
+          SkyInfoTiles.GetAutoHide()[ruleKey] = val
+        end
+        if SkyInfoTiles.ApplyVisibility then
+          SkyInfoTiles.ApplyVisibility()
+        end
+      end,
+      rule.tooltip
+    )
+    table.insert(autoHideRows, row)
+    yOffset = yOffset - rowH
+  end
+  generalTab.autoHideRows = autoHideRows
+  yOffset = yOffset - 10
+
+  -- === Hide in Combat (per-tile) ===
+  local _, hideCombatHeaderH = W:CreateSectionHeader(scrollChild, yOffset, "Hide in Combat (per tile)")
+  yOffset = yOffset - hideCombatHeaderH - 10
+
+  local hideInCombatRows = {}
+  for _, cat in ipairs(SkyInfoTiles.CATALOG or {}) do
+    local tileKey = cat.key
+    local row, rowH = W:CreateToggle(scrollChild, yOffset, cat.label,
+      function()
+        if not SkyInfoTiles.GetTileHideInCombat then return false end
+        return SkyInfoTiles.GetTileHideInCombat(tileKey)
+      end,
+      function(val)
+        if SkyInfoTiles.SetTileHideInCombat then
+          SkyInfoTiles.SetTileHideInCombat(tileKey, val)
+        end
+      end,
+      "Hide the " .. cat.label .. " tile while you are in combat"
+    )
+    table.insert(hideInCombatRows, row)
+    yOffset = yOffset - rowH
+  end
+  generalTab.hideInCombatRows = hideInCombatRows
+  yOffset = yOffset - 10
+
   -- Section header
-  local _, headerHeight = W:CreateSectionHeader(generalTab, yOffset, "Maintenance")
+  local _, headerHeight = W:CreateSectionHeader(scrollChild, yOffset, "Maintenance")
   yOffset = yOffset - headerHeight - 10
 
   -- Reset button
-  local _resetBtn, h2 = W:CreateButton(generalTab, yOffset, "Reset All Settings", 200,
+  local _resetBtn, h2 = W:CreateButton(scrollChild, yOffset, "Reset All Settings", 200,
     function()
       if SkyInfoTiles.ResetProfile then
         SkyInfoTiles.ResetProfile()
@@ -777,7 +847,7 @@ local function CreateOptionsWindow()
   yOffset = yOffset - h2
 
   -- Clean button
-  local _cleanBtn, h3 = W:CreateButton(generalTab, yOffset, "Clean Database", 200,
+  local _cleanBtn, h3 = W:CreateButton(scrollChild, yOffset, "Clean Database", 200,
     function()
       if SkyInfoTiles.CleanProfile then
         SkyInfoTiles.CleanProfile()
@@ -787,6 +857,9 @@ local function CreateOptionsWindow()
     "Remove duplicate tiles and clean up the database"
   )
   yOffset = yOffset - h3
+
+  -- Set scroll child height to fit all content
+  scrollChild:SetSize(580, math.abs(yOffset) + 20)
 
   -- === TAB 2: CURRENCIES ===
   local currencyTab = CreateFrame("Frame", nil, contentArea)
@@ -2666,13 +2739,13 @@ local function CreateOptionsWindow()
   yOffsetDungeon = yOffsetDungeon - strataHeight - 10
 
   -- Call continuation function to avoid 200 local variable limit
-  CreateOptionsWindow_Part2(contentArea, tabContent, f, tabs)
+  CreateOptionsWindow_Part2(contentArea, tabContent, f)
 
   return f
 end
 
 -- Continuation of CreateOptionsWindow (to avoid 200 local variable limit)
-CreateOptionsWindow_Part2 = function(contentArea, tabContent, f, tabs)
+CreateOptionsWindow_Part2 = function(contentArea, tabContent, f)
   -- Helper to get tracker-specific settings
   local function GetTrackerSettings(tile, trackerType)
     if not tile then return {} end
@@ -4009,8 +4082,8 @@ CreateOptionsWindow_Part2 = function(contentArea, tabContent, f, tabs)
 
   -- Show first tab by default and layout tabs
   -- Select first button (General) by default
-  if SelectSidebarButton then
-    SelectSidebarButton(1)
+  if f.SelectSidebarButton then
+    f.SelectSidebarButton(1)
   else
     -- Fallback: show first tab content manually
     if tabContent[1] then
@@ -4023,7 +4096,6 @@ CreateOptionsWindow_Part2 = function(contentArea, tabContent, f, tabs)
 
   -- Save frame
   optionsFrame = f
-  f.sidebarButtons = sidebarButtons
   f.tabContent = tabContent
 end
 
@@ -4032,58 +4104,13 @@ local function RefreshOptionsWindow()
   local f = optionsFrame
   if not f then return end
 
-  -- Refresh general tab checkboxes
-  if f.tabContent and f.tabContent[1] and f.tabContent[1].lockCheck then
-    f.tabContent[1].lockCheck:SetChecked(SkyInfoTilesDB.locked or false)
-  end
-
-  -- Refresh hide label checkbox for currencies (skip Populate to avoid triggering tile refresh)
-  if f.tabContent and f.tabContent[2] and f.tabContent[2].hideLabelCheck then
-    local hideLabel = false
-    if SkyInfoTiles.GetActiveTiles then
-      local tiles = SkyInfoTiles.GetActiveTiles()
-      for _, tile in ipairs(tiles) do
-        if tile.key == "currencies" or tile.type == "currencies" then
-          hideLabel = tile.hideLabel or false
-          break
-        end
-      end
-    end
-    f.tabContent[2].hideLabelCheck._programmaticChange = true
-    f.tabContent[2].hideLabelCheck:SetChecked(hideLabel)
-    f.tabContent[2].hideLabelCheck._programmaticChange = false
-  end
-
-  -- Refresh all tile enable checkboxes
-  local tileKeys = {
-    [2] = "currencies",
-    [3] = "keystone",
-    [4] = "charstats",
-    [5] = "crosshair",
-    [6] = "clock",
-    [7] = "dungeonports",
-    [8] = "bufftracker",
-    [9] = "infobar",
-    [11] = "manawarning"
-  }
-
-  for tabIndex, tileKey in pairs(tileKeys) do
-    if f.tabContent and f.tabContent[tabIndex] and f.tabContent[tabIndex].enableCheck then
-      local enabled = true -- Default
-      if SkyInfoTiles.GetActiveTiles then
-        local tiles = SkyInfoTiles.GetActiveTiles()
-        for _, tile in ipairs(tiles) do
-          if tile.key == tileKey or tile.type == tileKey then
-            enabled = (tile.enabled ~= false)
-            break
-          end
-        end
-      end
-      local checkbox = f.tabContent[tabIndex].enableCheck
-      checkbox._programmaticChange = true
-      checkbox:SetChecked(enabled)
-      checkbox._programmaticChange = false
-    end
+  -- Resync every styled toggle (lock, auto-hide, per-tile enable, ...) from its
+  -- own getValue(). Each toggle caches its state internally, so without this it
+  -- keeps showing whatever it showed last - and its next click sends the wrong
+  -- value, since it flips the stale state.
+  local W = SkyInfoTiles.StyledWidgets
+  if W and W.RefreshAllToggles then
+    W:RefreshAllToggles()
   end
 
   -- Refresh char stats

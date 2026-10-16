@@ -12,6 +12,29 @@ end
 local Widgets = {}
 SkyInfoTiles.StyledWidgets = Widgets
 
+-- Every toggle created by CreateToggle, so they can all be resynced from their
+-- getValue() when a setting changes outside of the options window
+Widgets._toggles = {}
+
+function Widgets:RefreshAllToggles()
+  local list = self._toggles
+  local kept = 0
+  for i = 1, #list do
+    local toggle = list[i]
+    -- Rows are discarded with SetParent(nil) when a list is repopulated
+    -- (currencies); drop those instead of refreshing them forever
+    local row = toggle and toggle.GetParent and toggle:GetParent()
+    if row and row.GetParent and row:GetParent() then
+      kept = kept + 1
+      list[kept] = toggle
+      if toggle.Refresh then pcall(toggle.Refresh) end
+    end
+  end
+  for i = #list, kept + 1, -1 do
+    list[i] = nil
+  end
+end
+
 -- StyledWidgets loaded
 
 -------------------------------------------------------------------------------
@@ -214,6 +237,12 @@ function Widgets:CreateToggle(parent, yOffset, labelText, getValue, setValue, to
   toggle.Refresh = function()
     UpdateVisual(true)
   end
+  row.toggle = toggle
+
+  -- A toggle caches its own on/off state, so it must be resynced whenever the
+  -- underlying setting is changed from elsewhere (slash command, minimap button,
+  -- another panel). Registering here means every toggle is covered automatically.
+  Widgets._toggles[#Widgets._toggles + 1] = toggle
 
   return row, 35  -- Return row and height consumed
 end
