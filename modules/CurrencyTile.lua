@@ -33,6 +33,7 @@ local CURRENCY_DEFS = {
   { itemID = 273000, label = "Corrosive Soul", group = "item" },
   { itemID = 274422, label = "Ossified Relic", group = "item" },
   { itemID = 274374, label = "Trovehunter's Bounty", group = "item" },
+  { itemID = 280562, label = "Ascendant Venomstone", group = "item" },
 }
 
 -- Warband transfer state is read from the API so the grouping stays correct
